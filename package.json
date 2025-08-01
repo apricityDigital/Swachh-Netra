@@ -12,11 +12,13 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
+    "@react-native-async-storage/async-storage": "2.1.2",
     "@react-native-picker/picker": "^2.11.1",
     "@react-navigation/bottom-tabs": "^7.4.4",
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.16",
     "babel-plugin-module-resolver": "^5.0.2",
+    "cors": "^2.8.5",
     "expo": "~53.0.20",
     "expo-blur": "~14.1.5",
     "expo-constants": "~17.1.7",
@@ -33,6 +35,9 @@
     "expo-symbols": "~0.4.5",
     "expo-system-ui": "~5.0.10",
     "expo-web-browser": "~14.2.0",
+    "express": "^5.1.0",
+    "firebase": "^12.0.0",
+    "firebase-admin": "^13.4.0",
     "lucide-react": "^0.534.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
@@ -60,5 +65,17 @@
     "eslint-config-expo": "~9.2.0",
     "typescript": "~5.8.3"
   },
-  "private": true
+  "private": true,
+  "description": "<<<<<<< HEAD # Welcome to your Expo app 👋",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Minakshi843/Swachh_Netraa.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Minakshi843/Swachh_Netraa/issues"
+  },
+  "homepage": "https://github.com/Minakshi843/Swachh_Netraa#readme"
 }
