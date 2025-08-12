@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 node_modules
 .DS_Store
 .env
@@ -24,4 +25,90 @@ yarn-error.log*
 # Ignore test output
 test-results/
 *.test.js
+=======
+# Node / package managers
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Logs / temp
+*.log
+*.tmp
+*.temp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Expo / React Native
+.expo/
+.expo-shared/
+.expo/web/cache/
+.expo/web/compiled/
+dist/
+web-build/
+build/
+coverage/
+
+# iOS
+ios/build/
+ios/DerivedData/
+ios/Pods/
+ios/*.xcworkspace
+ios/*/Pods/
+
+# Android
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/*.iml
+.gradle/
+*.iml
+
+# EAS Build caches
+.eas-build/
+.eas/cache/
+
+# Metro / packager state
+.packager
+.expo/packager-info.json
+.expo/devices.json
+
+# Firebase secrets (do not commit)
+android/app/google-services.json
+ios/GoogleService-Info.plist
+GoogleService-Info.plist
+
+# Environment files (keep an example instead)
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Keystores / credentials
+*.keystore
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Temporary directories
+tmp/
+temp/
+>>>>>>> master
 
