@@ -19,6 +19,11 @@ import { doc, getDoc } from 'firebase/firestore';
 import { FIREBASE_AUTH, FIRESTORE_DB } from '../../../FirebaseConfig';
 import { StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import AdminDashboard from '../admin/AdminDashboard';
+import ContractorDashboard from '../contractor/ContractorDashboard';
+import SwachhHRDashboard from '../swachh_hr/Swachh_hr_Dashboard';
+import DriverDashboard from '../driver/DriverDashboard';
+
 
 const { width, height } = Dimensions.get('window');
 
@@ -64,26 +69,28 @@ const Login = () => {
                             [
                                 {
                                     text: 'Continue',
-                                    onPress: () => navigation.navigate('AdminDashboard' as never)
+                                    onPress: () => navigation.navigate(AdminDashboard as never)
                                 }
                             ],
                             { cancelable: false }
                         );
                         break;
                  
-                    case 'contractor':
+                    case 'transport_contractor':
                         Alert.alert(
                             'Welcome Contractor',
                             `Hello ${userName}! Redirecting to Contractor Dashboard...`,
                             [
                                 {
                                     text: 'Continue',
-                                    onPress: () => navigation.navigate('ContractorDashboard' as never)
+                                    onPress: () => navigation.navigate(ContractorDashboard as never)
                                 }
                             ],
                             { cancelable: false }
                         );
                         break;
+
+
                     case 'swachh_hr':
                         Alert.alert(
                             'Welcome Swachh HR',
@@ -91,7 +98,7 @@ const Login = () => {
                             [
                                 {
                                     text: 'Continue',
-                                    onPress: () => navigation.navigate('SwachhHRDashboard' as never)
+                                    onPress: () => navigation.navigate(SwachhHRDashboard as never)
                                 }
                             ],
                             { cancelable: false }
@@ -108,7 +115,7 @@ const Login = () => {
                     [
                         {
                             text: 'Continue',
-                            onPress: () => navigation.navigate('DriverDashboard' as never)
+                            onPress: () => navigation.navigate(DriverDashboard as never)
                         }
                     ],
                     { cancelable: false }
@@ -123,7 +130,7 @@ const Login = () => {
                 [
                     {
                         text: 'Continue',
-                        onPress: () => navigation.navigate('DriverDashboard' as never)
+                        onPress: () => navigation.navigate(DriverDashboard as never)
                     }
                 ],
                 { cancelable: false }
@@ -441,10 +448,10 @@ const Login = () => {
                 {/* Footer */}
                 <View style={styles.footer}>
                     <Text style={styles.footerText}>
-                        Powered by Pune Municipal Corporation
+                        Powered by APRICITY DIGITAL LAB
                     </Text>
                     <Text style={styles.footerSubtext}>
-                        Secure • Reliable • Citizen-First
+                        Secure • Reliable 
                     </Text>
                 </View>
             </ScrollView>
