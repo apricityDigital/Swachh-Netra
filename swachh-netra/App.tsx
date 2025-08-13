@@ -1,12 +1,14 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { StatusBar } from 'expo-status-bar';
-import Login from './app/screens/Login';
-import Home from './app/screens/Home';
-import Admin from './app/screens/admin/Admin';
-import { StyleSheet, Text, View } from 'react-native';
+import Login from './app/screens/auth/Login';
+import Signup from './app/screens/auth/Signup';
+import AdminDashboard from './app/screens/admin/AdminDashboard';
+import ContractorDashboard from './app/screens/contractor/ContractorDashboard';
+import DriverDashboard from './app/screens/driver/DriverDashboard';
+
+
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import Signup from './app/screens/Signup';
 const Stack = createNativeStackNavigator();
 export default function App() {
   return (
@@ -14,8 +16,10 @@ export default function App() {
       <Stack.Navigator initialRouteName='Login'>
         <Stack.Screen name='Login' component={Login} options={{ headerShown: false }} />
         <Stack.Screen name='Signup' component={Signup} options={{ headerShown: false }} />
-        <Stack.Screen name='Home' component={Home} options={{ headerShown: false }} />
-        <Stack.Screen name='Admin' component={Admin} options={{ headerShown: false }} />
+        <Stack.Screen name='AdminDashboard' component={AdminDashboard} options={{ headerShown: false }} />
+        <Stack.Screen name='ContractorDashboard' component={ContractorDashboard} options={{ headerShown: false }} />
+        <Stack.Screen name='DriverDashboard' component={DriverDashboard} options={{ headerShown: false }} />
+
       </Stack.Navigator>
     </NavigationContainer>
   )

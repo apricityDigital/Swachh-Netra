@@ -64,7 +64,7 @@ const Login = () => {
                             [
                                 {
                                     text: 'Continue',
-                                    onPress: () => navigation.navigate('Admin' as never)
+                                    onPress: () => navigation.navigate('AdminDashboard' as never)
                                 }
                             ],
                             { cancelable: false }
@@ -77,7 +77,7 @@ const Login = () => {
                             [
                                 {
                                     text: 'Continue',
-                                    onPress: () => navigation.navigate('Home' as never) // You can create a separate Officer page later
+                                    onPress: () => navigation.navigate('ContractorDashboard' as never)
                                 }
                             ],
                             { cancelable: false }
@@ -91,7 +91,7 @@ const Login = () => {
                             [
                                 {
                                     text: 'Continue',
-                                    onPress: () => navigation.navigate('Home' as never)
+                                    onPress: () => navigation.navigate('DriverDashboard' as never)
                                 }
                             ],
                             { cancelable: false }
@@ -107,7 +107,7 @@ const Login = () => {
                     [
                         {
                             text: 'Continue',
-                            onPress: () => navigation.navigate('Home' as never)
+                            onPress: () => navigation.navigate('DriverDashboard' as never)
                         }
                     ],
                     { cancelable: false }
@@ -122,7 +122,7 @@ const Login = () => {
                 [
                     {
                         text: 'Continue',
-                        onPress: () => navigation.navigate('Home' as never)
+                        onPress: () => navigation.navigate('DriverDashboard' as never)
                     }
                 ],
                 { cancelable: false }

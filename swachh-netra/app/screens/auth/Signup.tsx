@@ -21,7 +21,7 @@ const Signup = () => {
         password: '',
         confirmPassword: '',
         phone: '',
-        role: 'citizen' // default role
+        role: 'driver' // default role
     });
     const [loading, setLoading] = useState(false);
     const [adminSecret, setAdminSecret] = useState('');
@@ -30,9 +30,10 @@ const Signup = () => {
 
     // Define roles for your municipal monitoring app
     const roles = [
-        { value: 'citizen', label: 'Citizen', description: 'Report issues and track requests' },
-        { value: 'municipal_officer', label: 'Municipal Officer', description: 'Manage municipal services' },
-        { value: 'admin', label: 'Administrator', description: 'Full system access' }
+        { value: 'driver', label: 'Driver', description: 'pilot of swachh vehicles' },
+        { value: 'swachh_hr', label: 'Swachh HR', description: 'Manage swachh workers' },
+        { value: 'transport_contractor', label: 'Contractor', description: 'Manage Driver and vehicles' },
+        { value: 'admin', label: 'Administrator', description: 'Full system access' },
     ];
 
     // Admin secret key - in production, this should be more secure
@@ -117,7 +118,15 @@ const Signup = () => {
                     canGenerateReports: true,
                     canManageSystem: true
                 };
-            case 'municipal_officer':
+            case 'transport_contractor':
+                return {                    
+                    canManageUsers: true,
+                    canViewAllReports: true,
+                    canAssignTasks: true,
+                    canGenerateReports: true,
+                    canManageSystem: true
+                };
+            case 'swachh_hr':
                 return {
                     canManageUsers: false,
                     canViewAllReports: true,
@@ -125,7 +134,7 @@ const Signup = () => {
                     canGenerateReports: true,
                     canManageSystem: false
                 };
-            case 'citizen':
+            case 'driver':
             default:
                 return {
                     canManageUsers: false,

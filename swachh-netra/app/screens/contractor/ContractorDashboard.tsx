@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { signOut } from 'firebase/auth';
 import { doc, getDoc, collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
-import { FIREBASE_AUTH, FIRESTORE_DB } from '../../FirebaseConfig';
+import { FIREBASE_AUTH, FIRESTORE_DB } from '../../../FirebaseConfig';
 
 const { width } = Dimensions.get('window');
 
@@ -57,7 +57,7 @@ const Home = ({ navigation }: { navigation: any }) => {
             const user = FIREBASE_AUTH.currentUser;
             if (user) {
                 const reportsRef = collection(FIRESTORE_DB, 'reports');
-                
+
                 let reportsQuery;
                 if (userRole === 'citizen') {
                     reportsQuery = query(reportsRef, where('userId', '==', user.uid));
@@ -188,7 +188,7 @@ const Home = ({ navigation }: { navigation: any }) => {
                             </View>
                         </View>
                         <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-                            <Text style={styles.logoutIcon}>🚪</Text>
+
                             <Text style={styles.logoutText}>Logout</Text>
                         </TouchableOpacity>
                     </View>
@@ -387,10 +387,12 @@ const styles = StyleSheet.create({
     },
     logoutButton: {
         alignItems: 'center',
-        backgroundColor: '#ffffff20',
+        backgroundColor: '#d10b0bf3',
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderRadius: 12,
+        marginTop: 20,
+
     },
     logoutIcon: {
         fontSize: 18,
