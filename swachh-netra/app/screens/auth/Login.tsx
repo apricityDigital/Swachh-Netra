@@ -90,6 +90,18 @@ const Login = () => {
                         );
                         break;
 
+                       case 'driver':
+                         Alert.alert(
+                    'Welcome',
+                    'Login successful. Redirecting to dashboard...',
+                    [
+                        {
+                            text: 'Continue',
+                            onPress: () => navigation.navigate(DriverDashboard as never)
+                        }
+                    ],
+                    { cancelable: false }
+                );
 
                     case 'swachh_hr':
                         Alert.alert(
@@ -104,6 +116,8 @@ const Login = () => {
                             { cancelable: false }
                         );
                         break;
+
+
                   
                 }
             } else {

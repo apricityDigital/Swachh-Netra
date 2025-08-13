@@ -273,6 +273,7 @@ const DriverDashboard = ({ navigation }: any) => {
       )}
     </ScrollView>
   )
+
 }
 
 const styles = StyleSheet.create({
