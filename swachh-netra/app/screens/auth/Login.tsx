@@ -70,10 +70,11 @@ const Login = () => {
                             { cancelable: false }
                         );
                         break;
-                    case 'municipal_officer':
+                 
+                    case 'contractor':
                         Alert.alert(
-                            'Welcome Officer',
-                            `Hello ${userName}! Redirecting to Officer Dashboard...`,
+                            'Welcome Contractor',
+                            `Hello ${userName}! Redirecting to Contractor Dashboard...`,
                             [
                                 {
                                     text: 'Continue',
@@ -83,20 +84,20 @@ const Login = () => {
                             { cancelable: false }
                         );
                         break;
-                    case 'citizen':
-                    default:
+                    case 'swachh_hr':
                         Alert.alert(
-                            'Welcome Citizen',
-                            `Hello ${userName}! Redirecting to Citizen Dashboard...`,
+                            'Welcome Swachh HR',
+                            `Hello ${userName}! Redirecting to Swachh HR Dashboard...`,
                             [
                                 {
                                     text: 'Continue',
-                                    onPress: () => navigation.navigate('DriverDashboard' as never)
+                                    onPress: () => navigation.navigate('SwachhHRDashboard' as never)
                                 }
                             ],
                             { cancelable: false }
                         );
                         break;
+                  
                 }
             } else {
                 // If user document doesn't exist in Firestore, treat as citizen
