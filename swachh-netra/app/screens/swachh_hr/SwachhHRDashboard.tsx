@@ -18,51 +18,52 @@ import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 
 const { width } = Dimensions.get("window")
 
-const DriverDashboard = ({ navigation }: any) => {
+const SwachhHRDashboard = ({ navigation }: any) => {
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [driverStats, setDriverStats] = useState({
-    todayTrips: 0,
-    completedPickups: 8,
-    pendingPickups: 4,
-    totalDistance: 45.2,
-    wasteCollected: 120,
-    currentStatus: "Available",
+  const [hrStats, setHrStats] = useState({
+    totalWorkers: 45,
+    activeWorkers: 38,
+    todayAttendance: 85,
+    wasteCollected: 2.4,
+    unassignedWorkers: 3,
+    pendingRequests: 2,
+    activeFeederPoints: 15,
   })
-  const [userName, setUserName] = useState("Driver")
+  const [userName, setUserName] = useState("HR Manager")
 
-  const driverActions = [
+  const hrActions = [
     {
-      title: "Start Trip",
-      description: "Begin waste collection route",
-      icon: "play-circle",
-      color: "#10b981",
-      bgColor: "#f0fdf4",
-      action: "startTrip",
-    },
-    {
-      title: "Report Issue",
-      description: "Report vehicle or route issues",
-      icon: "report-problem",
-      color: "#f59e0b",
-      bgColor: "#fffbeb",
-      action: "reportIssue",
-    },
-    {
-      title: "View Route",
-      description: "Check assigned collection route",
-      icon: "map",
+      title: "Worker Management",
+      description: "Manage workforce and assignments",
+      icon: "people",
       color: "#3b82f6",
       bgColor: "#eff6ff",
-      action: "viewRoute",
+      screen: "WorkerManagement",
     },
     {
-      title: "Collection Log",
-      description: "View collection history",
-      icon: "history",
+      title: "Attendance Tracking",
+      description: "Track daily attendance",
+      icon: "schedule",
+      color: "#10b981",
+      bgColor: "#f0fdf4",
+      screen: "AttendanceTracking",
+    },
+    {
+      title: "Performance Reports",
+      description: "View worker performance",
+      icon: "analytics",
+      color: "#f59e0b",
+      bgColor: "#fffbeb",
+      screen: "PerformanceReports",
+    },
+    {
+      title: "Payroll Management",
+      description: "Manage worker payments",
+      icon: "payment",
       color: "#8b5cf6",
       bgColor: "#faf5ff",
-      action: "viewHistory",
+      screen: "PayrollManagement",
     },
   ]
 
@@ -75,17 +76,18 @@ const DriverDashboard = ({ navigation }: any) => {
     try {
       const user = FIREBASE_AUTH.currentUser
       if (user) {
-        // TODO: Fetch real driver data from Firebase
+        // TODO: Fetch real HR data from Firebase
         // For now using mock data
-        setDriverStats({
-          todayTrips: 3,
-          completedPickups: 8,
-          pendingPickups: 4,
-          totalDistance: 45.2,
-          wasteCollected: 120,
-          currentStatus: "Available",
+        setHrStats({
+          totalWorkers: 45,
+          activeWorkers: 38,
+          todayAttendance: 85,
+          wasteCollected: 2.4,
+          unassignedWorkers: 3,
+          pendingRequests: 2,
+          activeFeederPoints: 15,
         })
-        setUserName("John Doe") // TODO: Get from user profile
+        setUserName("Sarah Johnson") // TODO: Get from user profile
       }
     } catch (error) {
       console.log("Error fetching dashboard data:", error)
@@ -118,30 +120,15 @@ const DriverDashboard = ({ navigation }: any) => {
     ])
   }
 
-  const handleAction = (action: string) => {
-    switch (action) {
-      case "startTrip":
-        Alert.alert("Start Trip", "Trip functionality will be implemented soon")
-        break
-      case "reportIssue":
-        Alert.alert("Report Issue", "Issue reporting will be implemented soon")
-        break
-      case "viewRoute":
-        Alert.alert("View Route", "Route viewing will be implemented soon")
-        break
-      case "viewHistory":
-        Alert.alert("Collection Log", "History viewing will be implemented soon")
-        break
-      default:
-        break
-    }
+  const handleAction = (screen: string) => {
+    Alert.alert("Coming Soon", `${screen} functionality will be implemented soon`)
   }
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <MaterialIcons name="local-shipping" size={48} color="#3b82f6" />
-        <Text style={styles.loadingText}>Loading Driver Dashboard...</Text>
+        <MaterialIcons name="group" size={48} color="#3b82f6" />
+        <Text style={styles.loadingText}>Loading HR Dashboard...</Text>
       </View>
     )
   }
@@ -154,13 +141,13 @@ const DriverDashboard = ({ navigation }: any) => {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
-            <View style={styles.driverBadge}>
-              <MaterialIcons name="local-shipping" size={24} color="#3b82f6" />
+            <View style={styles.hrBadge}>
+              <MaterialIcons name="group" size={24} color="#3b82f6" />
             </View>
             <View style={styles.headerText}>
               <Text style={styles.welcomeText}>Welcome back,</Text>
               <Text style={styles.userName}>{userName}</Text>
-              <Text style={styles.roleText}>Driver</Text>
+              <Text style={styles.roleText}>HR Manager</Text>
             </View>
           </View>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
@@ -176,16 +163,16 @@ const DriverDashboard = ({ navigation }: any) => {
       >
         {/* Statistics Overview */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Today's Overview</Text>
+          <Text style={styles.sectionTitle}>Workforce Overview</Text>
           <View style={styles.statsGrid}>
             <Card style={styles.statCard}>
               <View style={styles.statContent}>
                 <View style={[styles.statIcon, { backgroundColor: '#eff6ff' }]}>
-                  <MaterialIcons name="route" size={24} color="#3b82f6" />
+                  <MaterialIcons name="people" size={24} color="#3b82f6" />
                 </View>
                 <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{driverStats.todayTrips}</Text>
-                  <Text style={styles.statLabel}>Trips</Text>
+                  <Text style={styles.statNumber}>{hrStats.totalWorkers}</Text>
+                  <Text style={styles.statLabel}>Total Workers</Text>
                 </View>
               </View>
             </Card>
@@ -196,8 +183,8 @@ const DriverDashboard = ({ navigation }: any) => {
                   <MaterialIcons name="check-circle" size={24} color="#10b981" />
                 </View>
                 <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{driverStats.completedPickups}</Text>
-                  <Text style={styles.statLabel}>Completed</Text>
+                  <Text style={styles.statNumber}>{hrStats.activeWorkers}</Text>
+                  <Text style={styles.statLabel}>Active Today</Text>
                 </View>
               </View>
             </Card>
@@ -205,23 +192,23 @@ const DriverDashboard = ({ navigation }: any) => {
             <Card style={styles.statCard}>
               <View style={styles.statContent}>
                 <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
-                  <MaterialIcons name="navigation" size={24} color="#f59e0b" />
+                  <MaterialIcons name="schedule" size={24} color="#f59e0b" />
                 </View>
                 <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{driverStats.totalDistance}</Text>
-                  <Text style={styles.statLabel}>KM</Text>
+                  <Text style={styles.statNumber}>{hrStats.todayAttendance}%</Text>
+                  <Text style={styles.statLabel}>Attendance</Text>
                 </View>
               </View>
             </Card>
 
             <Card style={styles.statCard}>
               <View style={styles.statContent}>
-                <View style={[styles.statIcon, { backgroundColor: '#faf5ff' }]}>
-                  <MaterialIcons name="delete" size={24} color="#8b5cf6" />
+                <View style={[styles.statIcon, { backgroundColor: '#fef2f2' }]}>
+                  <MaterialIcons name="person-off" size={24} color="#ef4444" />
                 </View>
                 <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{driverStats.wasteCollected}</Text>
-                  <Text style={styles.statLabel}>KG</Text>
+                  <Text style={styles.statNumber}>{hrStats.unassignedWorkers}</Text>
+                  <Text style={styles.statLabel}>Unassigned</Text>
                 </View>
               </View>
             </Card>
@@ -232,10 +219,10 @@ const DriverDashboard = ({ navigation }: any) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.actionsGrid}>
-            {driverActions.map((action, index) => (
+            {hrActions.map((action, index) => (
               <TouchableOpacity 
                 key={index} 
-                onPress={() => handleAction(action.action)} 
+                onPress={() => handleAction(action.screen)} 
                 activeOpacity={0.7}
               >
                 <Card style={styles.actionCard}>
@@ -255,31 +242,45 @@ const DriverDashboard = ({ navigation }: any) => {
           </View>
         </View>
 
-        {/* Current Status */}
+        {/* Today's Summary */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Current Status</Text>
-          <Card style={styles.statusCard}>
-            <View style={styles.statusContent}>
-              <View style={styles.statusHeader}>
-                <View style={styles.statusIndicator}>
-                  <View style={[styles.statusDot, { backgroundColor: '#10b981' }]} />
-                  <Text style={styles.statusText}>{driverStats.currentStatus}</Text>
-                </View>
-                <Text style={styles.statusTime}>Last updated: Just now</Text>
+          <Text style={styles.sectionTitle}>Today's Summary</Text>
+          <Card style={styles.summaryCard}>
+            <View style={styles.summaryContent}>
+              <View style={styles.summaryHeader}>
+                <Text style={styles.summaryTitle}>Daily Operations</Text>
+                <Text style={styles.summaryDate}>Today</Text>
               </View>
               
-              <View style={styles.statusDetails}>
-                <View style={styles.statusItem}>
-                  <MaterialIcons name="schedule" size={16} color="#6b7280" />
-                  <Text style={styles.statusItemText}>Shift: 8:00 AM - 6:00 PM</Text>
+              <View style={styles.summaryStats}>
+                <View style={styles.summaryItem}>
+                  <View style={styles.summaryRow}>
+                    <View style={styles.summaryLabel}>
+                      <MaterialIcons name="delete" size={16} color="#10b981" />
+                      <Text style={styles.summaryText}>Waste Collected</Text>
+                    </View>
+                    <Text style={styles.summaryValue}>{hrStats.wasteCollected} tons</Text>
+                  </View>
                 </View>
-                <View style={styles.statusItem}>
-                  <MaterialIcons name="location-on" size={16} color="#6b7280" />
-                  <Text style={styles.statusItemText}>Zone: Central District</Text>
+
+                <View style={styles.summaryItem}>
+                  <View style={styles.summaryRow}>
+                    <View style={styles.summaryLabel}>
+                      <MaterialIcons name="location-on" size={16} color="#3b82f6" />
+                      <Text style={styles.summaryText}>Active Feeder Points</Text>
+                    </View>
+                    <Text style={styles.summaryValue}>{hrStats.activeFeederPoints}</Text>
+                  </View>
                 </View>
-                <View style={styles.statusItem}>
-                  <MaterialIcons name="local-shipping" size={16} color="#6b7280" />
-                  <Text style={styles.statusItemText}>Vehicle: DL-01-AB-1234</Text>
+
+                <View style={styles.summaryItem}>
+                  <View style={styles.summaryRow}>
+                    <View style={styles.summaryLabel}>
+                      <MaterialIcons name="pending-actions" size={16} color="#f59e0b" />
+                      <Text style={styles.summaryText}>Pending Requests</Text>
+                    </View>
+                    <Text style={styles.summaryValue}>{hrStats.pendingRequests}</Text>
+                  </View>
                 </View>
               </View>
             </View>
@@ -325,7 +326,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
-  driverBadge: {
+  hrBadge: {
     backgroundColor: "#eff6ff",
     borderRadius: 12,
     width: 48,
@@ -454,8 +455,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6b7280",
   },
-  // Status styles
-  statusCard: {
+  // Summary styles
+  summaryCard: {
     backgroundColor: "#ffffff",
     borderRadius: 12,
     elevation: 2,
@@ -464,46 +465,50 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
   },
-  statusContent: {
+  summaryContent: {
     padding: 20,
   },
-  statusHeader: {
+  summaryHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
   },
-  statusIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  statusText: {
+  summaryTitle: {
     fontSize: 16,
     fontWeight: "600",
     color: "#111827",
   },
-  statusTime: {
+  summaryDate: {
     fontSize: 12,
     color: "#9ca3af",
   },
-  statusDetails: {
-    gap: 12,
+  summaryStats: {
+    gap: 16,
   },
-  statusItem: {
+  summaryItem: {
+    marginBottom: 12,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  summaryLabel: {
     flexDirection: "row",
     alignItems: "center",
   },
-  statusItemText: {
+  summaryText: {
     fontSize: 14,
-    color: "#6b7280",
+    color: "#374151",
+    fontWeight: "500",
     marginLeft: 8,
+  },
+  summaryValue: {
+    fontSize: 16,
+    color: "#111827",
+    fontWeight: "600",
   },
 })
 
-export default DriverDashboard
+export default SwachhHRDashboard
