@@ -1,290 +1,518 @@
-//ContractorDashboard
+import React, { useState, useEffect } from "react"
+import {
+  View,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+  SafeAreaView,
+  StatusBar,
+  Platform,
+  Dimensions,
+  Alert,
+} from "react-native"
+import { Card, Text } from "react-native-paper"
+import { MaterialIcons } from "@expo/vector-icons"
+import { signOut } from "firebase/auth"
+import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 
-"use client"
+const { width } = Dimensions.get("window")
 
-import { useState } from "react"
-import { View, StyleSheet, ScrollView, RefreshControl } from "react-native"
-import { Card, Title, Paragraph, Text, Chip, Button, List } from "react-native-paper"
-import { MaterialCommunityIcons } from "@expo/vector-icons"
-
-export default function ContractorDashboard() {
+const ContractorDashboard = ({ navigation }: any) => {
   const [refreshing, setRefreshing] = useState(false)
-  const [dashboardData, setDashboardData] = useState({
+  const [loading, setLoading] = useState(true)
+  const [contractorStats, setContractorStats] = useState({
     totalDrivers: 12,
     activeDrivers: 10,
     totalVehicles: 8,
     activeVehicles: 7,
     todayPickups: 45,
     completedPickups: 38,
-    pendingRequests: 3,
-    alerts: [
-      { id: 1, type: "vehicle", message: "Vehicle V-003 needs maintenance", priority: "high" },
-      { id: 2, type: "driver", message: "Driver D-007 absent today", priority: "medium" },
-    ],
+    pendingApprovals: 3,
   })
+  const [userName, setUserName] = useState("Contractor")
 
-  const onRefresh = async () => {
-    setRefreshing(true)
-    setTimeout(() => {
-      setRefreshing(false)
-    }, 2000)
+  const contractorActions = [
+    {
+      title: "Manage Drivers",
+      description: "View and approve driver requests",
+      icon: "people",
+      color: "#3b82f6",
+      bgColor: "#eff6ff",
+      screen: "DriverApprovals",
+    },
+    {
+      title: "Vehicle Management",
+      description: "Manage fleet and assignments",
+      icon: "local-shipping",
+      color: "#10b981",
+      bgColor: "#f0fdf4",
+      screen: "VehicleManagement",
+    },
+    {
+      title: "Route Planning",
+      description: "Plan and optimize routes",
+      icon: "map",
+      color: "#f59e0b",
+      bgColor: "#fffbeb",
+      screen: "RoutePlanning",
+    },
+    {
+      title: "Reports",
+      description: "View performance reports",
+      icon: "analytics",
+      color: "#8b5cf6",
+      bgColor: "#faf5ff",
+      screen: "Reports",
+    },
+  ]
+
+  useEffect(() => {
+    fetchDashboardData()
+  }, [])
+
+  const fetchDashboardData = async () => {
+    setLoading(true)
+    try {
+      const user = FIREBASE_AUTH.currentUser
+      if (user) {
+        // TODO: Fetch real contractor data from Firebase
+        // For now using mock data
+        setContractorStats({
+          totalDrivers: 12,
+          activeDrivers: 10,
+          totalVehicles: 8,
+          activeVehicles: 7,
+          todayPickups: 45,
+          completedPickups: 38,
+          pendingApprovals: 3,
+        })
+        setUserName("John Smith") // TODO: Get from user profile
+      }
+    } catch (error) {
+      console.log("Error fetching dashboard data:", error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const StatCard = ({ title, value, subtitle, icon, color }: any) => (
-    <Card style={[styles.statCard, { borderLeftColor: color, borderLeftWidth: 4 }]}>
-      <Card.Content style={styles.statContent}>
-        <View style={styles.statHeader}>
-          <MaterialCommunityIcons name={icon} size={24} color={color} />
-          <Text style={styles.statValue}>{value}</Text>
-        </View>
-        <Text style={styles.statTitle}>{title}</Text>
-        {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
-      </Card.Content>
-    </Card>
-  )
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true)
+    await fetchDashboardData()
+    setRefreshing(false)
+  }, [])
+
+  const handleLogout = () => {
+    Alert.alert("Logout", "Are you sure you want to logout?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Logout",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await signOut(FIREBASE_AUTH)
+            navigation.replace("Login")
+          } catch (error) {
+            Alert.alert("Error", "Failed to logout")
+          }
+        },
+      },
+    ])
+  }
+
+  const handleAction = (screen: string) => {
+    if (screen === "DriverApprovals") {
+      navigation.navigate("DriverApprovals")
+    } else {
+      Alert.alert("Coming Soon", `${screen} functionality will be implemented soon`)
+    }
+  }
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <MaterialIcons name="business" size={48} color="#3b82f6" />
+        <Text style={styles.loadingText}>Loading Contractor Dashboard...</Text>
+      </View>
+    )
+  }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-    >
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+      
+      {/* Header */}
       <View style={styles.header}>
-        <Title style={styles.headerTitle}>Transport Contractor Dashboard</Title>
-        <Paragraph style={styles.headerSubtitle}>
-          {new Date().toLocaleDateString("en-US", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
-        </Paragraph>
+        <View style={styles.headerContent}>
+          <View style={styles.headerLeft}>
+            <View style={styles.contractorBadge}>
+              <MaterialIcons name="business" size={24} color="#3b82f6" />
+            </View>
+            <View style={styles.headerText}>
+              <Text style={styles.welcomeText}>Welcome back,</Text>
+              <Text style={styles.userName}>{userName}</Text>
+              <Text style={styles.roleText}>Contractor</Text>
+            </View>
+          </View>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <MaterialIcons name="logout" size={20} color="#6b7280" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <View style={styles.statsGrid}>
-        <StatCard title="Total Drivers" value={dashboardData.totalDrivers} icon="account-hard-hat" color="#FF9800" />
-        <StatCard
-          title="Active Today"
-          value={`${dashboardData.activeDrivers}/${dashboardData.totalDrivers}`}
-          subtitle={`${Math.round((dashboardData.activeDrivers / dashboardData.totalDrivers) * 100)}% active`}
-          icon="account-check"
-          color="#4CAF50"
-        />
-        <StatCard title="Total Vehicles" value={dashboardData.totalVehicles} icon="truck" color="#2196F3" />
-        <StatCard
-          title="Vehicles Active"
-          value={`${dashboardData.activeVehicles}/${dashboardData.totalVehicles}`}
-          subtitle={`${Math.round((dashboardData.activeVehicles / dashboardData.totalVehicles) * 100)}% operational`}
-          icon="truck-check"
-          color="#4CAF50"
-        />
-      </View>
+      <ScrollView
+        style={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Statistics Overview */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Fleet Overview</Text>
+          <View style={styles.statsGrid}>
+            <Card style={styles.statCard}>
+              <View style={styles.statContent}>
+                <View style={[styles.statIcon, { backgroundColor: '#eff6ff' }]}>
+                  <MaterialIcons name="people" size={24} color="#3b82f6" />
+                </View>
+                <View style={styles.statInfo}>
+                  <Text style={styles.statNumber}>{contractorStats.totalDrivers}</Text>
+                  <Text style={styles.statLabel}>Total Drivers</Text>
+                </View>
+              </View>
+            </Card>
 
-      <Card style={styles.card}>
-        <Card.Content>
-          <View style={styles.cardHeader}>
-            <Title style={styles.cardTitle}>Today's Operations</Title>
+            <Card style={styles.statCard}>
+              <View style={styles.statContent}>
+                <View style={[styles.statIcon, { backgroundColor: '#f0fdf4' }]}>
+                  <MaterialIcons name="check-circle" size={24} color="#10b981" />
+                </View>
+                <View style={styles.statInfo}>
+                  <Text style={styles.statNumber}>{contractorStats.activeDrivers}</Text>
+                  <Text style={styles.statLabel}>Active Drivers</Text>
+                </View>
+              </View>
+            </Card>
+
+            <Card style={styles.statCard}>
+              <View style={styles.statContent}>
+                <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
+                  <MaterialIcons name="local-shipping" size={24} color="#f59e0b" />
+                </View>
+                <View style={styles.statInfo}>
+                  <Text style={styles.statNumber}>{contractorStats.totalVehicles}</Text>
+                  <Text style={styles.statLabel}>Vehicles</Text>
+                </View>
+              </View>
+            </Card>
+
+            <Card style={styles.statCard}>
+              <View style={styles.statContent}>
+                <View style={[styles.statIcon, { backgroundColor: '#fef2f2' }]}>
+                  <MaterialIcons name="pending-actions" size={24} color="#ef4444" />
+                </View>
+                <View style={styles.statInfo}>
+                  <Text style={styles.statNumber}>{contractorStats.pendingApprovals}</Text>
+                  <Text style={styles.statLabel}>Pending</Text>
+                </View>
+              </View>
+            </Card>
           </View>
-          <View style={styles.operationsGrid}>
-            <View style={styles.operationItem}>
-              <MaterialCommunityIcons name="map-marker-multiple" size={32} color="#2196F3" />
-              <Text style={styles.operationValue}>{dashboardData.todayPickups}</Text>
-              <Text style={styles.operationLabel}>Total Pickups</Text>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.actionsGrid}>
+            {contractorActions.map((action, index) => (
+              <TouchableOpacity 
+                key={index} 
+                onPress={() => handleAction(action.screen)} 
+                activeOpacity={0.7}
+              >
+                <Card style={styles.actionCard}>
+                  <View style={styles.actionContent}>
+                    <View style={[styles.actionIcon, { backgroundColor: action.bgColor }]}>
+                      <MaterialIcons name={action.icon as any} size={28} color={action.color} />
+                    </View>
+                    <View style={styles.actionInfo}>
+                      <Text style={styles.actionTitle}>{action.title}</Text>
+                      <Text style={styles.actionDescription}>{action.description}</Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
+                  </View>
+                </Card>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Today's Performance */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Today's Performance</Text>
+          <Card style={styles.performanceCard}>
+            <View style={styles.performanceContent}>
+              <View style={styles.performanceHeader}>
+                <Text style={styles.performanceTitle}>Collection Summary</Text>
+                <Text style={styles.performanceDate}>Today</Text>
+              </View>
+              
+              <View style={styles.performanceStats}>
+                <View style={styles.performanceItem}>
+                  <View style={styles.performanceRow}>
+                    <View style={styles.performanceLabel}>
+                      <MaterialIcons name="assignment-turned-in" size={16} color="#10b981" />
+                      <Text style={styles.performanceText}>Completed Pickups</Text>
+                    </View>
+                    <Text style={styles.performanceValue}>{contractorStats.completedPickups}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.performanceItem}>
+                  <View style={styles.performanceRow}>
+                    <View style={styles.performanceLabel}>
+                      <MaterialIcons name="assignment" size={16} color="#3b82f6" />
+                      <Text style={styles.performanceText}>Total Pickups</Text>
+                    </View>
+                    <Text style={styles.performanceValue}>{contractorStats.todayPickups}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.performanceItem}>
+                  <View style={styles.performanceRow}>
+                    <View style={styles.performanceLabel}>
+                      <MaterialIcons name="local-shipping" size={16} color="#f59e0b" />
+                      <Text style={styles.performanceText}>Active Vehicles</Text>
+                    </View>
+                    <Text style={styles.performanceValue}>{contractorStats.activeVehicles}</Text>
+                  </View>
+                </View>
+              </View>
             </View>
-            <View style={styles.operationItem}>
-              <MaterialCommunityIcons name="check-circle" size={32} color="#4CAF50" />
-              <Text style={styles.operationValue}>{dashboardData.completedPickups}</Text>
-              <Text style={styles.operationLabel}>Completed</Text>
-            </View>
-            <View style={styles.operationItem}>
-              <MaterialCommunityIcons name="clock" size={32} color="#FF9800" />
-              <Text style={styles.operationValue}>{dashboardData.todayPickups - dashboardData.completedPickups}</Text>
-              <Text style={styles.operationLabel}>Pending</Text>
-            </View>
-          </View>
-        </Card.Content>
-      </Card>
-
-      <Card style={styles.card}>
-        <Card.Content>
-          <View style={styles.cardHeader}>
-            <Title style={styles.cardTitle}>Quick Actions</Title>
-          </View>
-          <View style={styles.quickActions}>
-            <Button mode="contained" icon="account-plus" style={styles.actionButton} onPress={() => {}}>
-              Add Driver
-            </Button>
-            <Button mode="outlined" icon="truck-plus" style={styles.actionButton} onPress={() => {}}>
-              Add Vehicle
-            </Button>
-          </View>
-          <View style={styles.quickActions}>
-            <Button mode="outlined" icon="map-marker-path" style={styles.actionButton} onPress={() => {}}>
-              Assign Routes
-            </Button>
-            <Button mode="outlined" icon="chart-line" style={styles.actionButton} onPress={() => {}}>
-              View Reports
-            </Button>
-          </View>
-        </Card.Content>
-      </Card>
-
-      <Card style={styles.card}>
-        <Card.Content>
-          <View style={styles.cardHeader}>
-            <Title style={styles.cardTitle}>Alerts & Issues</Title>
-            <Chip icon="alert" textStyle={{ fontSize: 12 }}>
-              {dashboardData.alerts.length}
-            </Chip>
-          </View>
-          {dashboardData.alerts.map((alert) => (
-            <List.Item
-              key={alert.id}
-              title={alert.message}
-              left={(props) => (
-                <MaterialCommunityIcons
-                  {...props}
-                  name={alert.priority === "high" ? "alert-circle" : "information"}
-                  color={alert.priority === "high" ? "#F44336" : "#FF9800"}
-                  size={24}
-                />
-              )}
-              right={(props) => (
-                <Button {...props} mode="text" compact>
-                  Resolve
-                </Button>
-              )}
-              style={styles.alertItem}
-            />
-          ))}
-        </Card.Content>
-      </Card>
-
-      <Card style={styles.card}>
-        <Card.Content>
-          <Title style={styles.cardTitle}>Pending Requests</Title>
-          <View style={styles.requestsContainer}>
-            <Chip icon="account-plus" style={styles.requestChip}>
-              2 Driver Additions
-            </Chip>
-            <Chip icon="truck-plus" style={styles.requestChip}>
-              1 Vehicle Addition
-            </Chip>
-          </View>
-          <Button mode="outlined" icon="file-document-multiple" style={styles.viewAllButton} onPress={() => {}}>
-            View All Requests
-          </Button>
-        </Card.Content>
-      </Card>
-    </ScrollView>
+          </Card>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+  },
+  loadingText: {
+    fontSize: 16,
+    color: "#6b7280",
+    fontWeight: "500",
+    marginTop: 16,
+  },
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#f9fafb",
   },
   header: {
-    padding: 16,
-    backgroundColor: "#FF9800",
+    backgroundColor: "#ffffff",
+    paddingTop: Platform.OS === "ios" ? 50 : 30,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
   },
-  headerTitle: {
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "bold",
+  headerContent: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
-  headerSubtitle: {
-    color: "#FFF3E0",
-    marginTop: 4,
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
   },
+  contractorBadge: {
+    backgroundColor: "#eff6ff",
+    borderRadius: 12,
+    width: 48,
+    height: 48,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  headerText: {
+    flex: 1,
+  },
+  welcomeText: {
+    fontSize: 14,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  userName: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#111827",
+    marginTop: 2,
+  },
+  roleText: {
+    fontSize: 12,
+    color: "#9ca3af",
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  logoutButton: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  content: {
+    flex: 1,
+  },
+  section: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 16,
+  },
+  // Statistics styles
   statsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    padding: 8,
-    gap: 8,
+    justifyContent: "space-between",
   },
   statCard: {
-    flex: 1,
-    minWidth: "45%",
+    width: (width - 60) / 2,
+    marginBottom: 16,
+    borderRadius: 12,
+    backgroundColor: "#ffffff",
     elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
   statContent: {
-    paddingVertical: 12,
-  },
-  statHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
+    padding: 16,
   },
-  statValue: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  statTitle: {
-    fontSize: 12,
-    color: "#757575",
-    marginBottom: 2,
-  },
-  statSubtitle: {
-    fontSize: 10,
-    color: "#9E9E9E",
-  },
-  card: {
-    margin: 8,
-    elevation: 2,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  statIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
+    marginRight: 12,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  operationsGrid: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-  },
-  operationItem: {
-    alignItems: "center",
-  },
-  operationValue: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#333",
-    marginTop: 8,
-  },
-  operationLabel: {
-    fontSize: 12,
-    color: "#757575",
-    marginTop: 4,
-  },
-  quickActions: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 12,
-  },
-  actionButton: {
+  statInfo: {
     flex: 1,
   },
-  alertItem: {
-    backgroundColor: "#f8f9fa",
-    marginBottom: 8,
-    borderRadius: 8,
+  statNumber: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 2,
   },
-  requestsContainer: {
+  statLabel: {
+    fontSize: 14,
+    color: "#6b7280",
+    fontWeight: "500",
+  },
+  // Actions styles
+  actionsGrid: {
+    gap: 12,
+  },
+  actionCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  actionContent: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
+    alignItems: "center",
+    padding: 16,
+  },
+  actionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  actionInfo: {
+    flex: 1,
+  },
+  actionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  actionDescription: {
+    fontSize: 14,
+    color: "#6b7280",
+  },
+  // Performance styles
+  performanceCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  performanceContent: {
+    padding: 20,
+  },
+  performanceHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 16,
   },
-  requestChip: {
-    backgroundColor: "#FFF3E0",
+  performanceTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
   },
-  viewAllButton: {
-    marginTop: 8,
+  performanceDate: {
+    fontSize: 12,
+    color: "#9ca3af",
+  },
+  performanceStats: {
+    gap: 16,
+  },
+  performanceItem: {
+    marginBottom: 12,
+  },
+  performanceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  performanceLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  performanceText: {
+    fontSize: 14,
+    color: "#374151",
+    fontWeight: "500",
+    marginLeft: 8,
+  },
+  performanceValue: {
+    fontSize: 16,
+    color: "#111827",
+    fontWeight: "600",
   },
 })
+
+export default ContractorDashboard
