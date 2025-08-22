@@ -17,10 +17,13 @@ import { signOut } from "firebase/auth"
 import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 import { ApprovalService } from "../../../services/ApprovalService"
 import AdminSidebar from "../../components/AdminSidebar"
+import ProtectedRoute from "../../components/ProtectedRoute"
+import { useRequireAdmin } from "../../hooks/useRequireAuth"
 
 const { width } = Dimensions.get("window")
 
 const AdminDashboard = ({ navigation }: any) => {
+  const { userData } = useRequireAdmin(navigation)
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [userStats, setUserStats] = useState({
@@ -32,7 +35,7 @@ const AdminDashboard = ({ navigation }: any) => {
     admins: 0,
     pendingApprovals: 0,
   })
-  const [userName, setUserName] = useState("Administrator")
+  const [userName, setUserName] = useState(userData?.fullName || "Administrator")
   const [sidebarVisible, setSidebarVisible] = useState(false)
 
   useEffect(() => {
@@ -89,19 +92,48 @@ const AdminDashboard = ({ navigation }: any) => {
   const adminActions = [
     {
       title: "User Management",
-      description: "Manage users and approvals",
+      description: "Manage all system users",
       screen: "UserManagement",
       icon: "people",
       color: "#3b82f6",
       bgColor: "#eff6ff",
+      category: "User Management"
+    },
+    {
+      title: "Contractors",
+      description: "Transport contractor management",
+      screen: "ContractorManagement",
+      icon: "business",
+      color: "#10b981",
+      bgColor: "#f0fdf4",
+      category: "User Management"
+    },
+    {
+      title: "Drivers",
+      description: "Driver management & assignments",
+      screen: "DriverManagement",
+      icon: "person",
+      color: "#f59e0b",
+      bgColor: "#fffbeb",
+      category: "User Management"
     },
     {
       title: "Feeder Points",
-      description: "Manage collection points",
+      description: "Waste collection points",
       screen: "FeederPointManagement",
-      icon: "location-on",
+      icon: "add-location",
       color: "#10b981",
       bgColor: "#f0fdf4",
+      category: "Resource Management"
+    },
+    {
+      title: "Vehicles",
+      description: "Fleet management",
+      screen: "VehicleManagement",
+      icon: "local-shipping",
+      color: "#06b6d4",
+      bgColor: "#ecfeff",
+      category: "Resource Management"
     },
     {
       title: "Point Assignments",
@@ -110,14 +142,7 @@ const AdminDashboard = ({ navigation }: any) => {
       icon: "assignment",
       color: "#f59e0b",
       bgColor: "#fffbeb",
-    },
-    {
-      title: "Vehicle Management",
-      description: "Register and manage vehicles",
-      screen: "VehicleManagement",
-      icon: "local-shipping",
-      color: "#06b6d4",
-      bgColor: "#ecfeff",
+      category: "Assignment Management"
     },
     {
       title: "Vehicle Assignments",
@@ -126,14 +151,25 @@ const AdminDashboard = ({ navigation }: any) => {
       icon: "assignment-ind",
       color: "#ef4444",
       bgColor: "#fef2f2",
+      category: "Assignment Management"
     },
     {
-      title: "System Reports",
-      description: "View system analytics",
+      title: "Reports & Analytics",
+      description: "System analytics & insights",
       screen: "AdminReports",
       icon: "analytics",
       color: "#8b5cf6",
       bgColor: "#faf5ff",
+      category: "System Overview"
+    },
+    {
+      title: "System Settings",
+      description: "System configuration",
+      screen: "AdminSettings",
+      icon: "settings",
+      color: "#6b7280",
+      bgColor: "#f9fafb",
+      category: "System Overview"
     },
   ]
 
@@ -147,178 +183,192 @@ const AdminDashboard = ({ navigation }: any) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+    <ProtectedRoute requiredRole="admin" navigation={navigation}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity
-            onPress={() => setSidebarVisible(true)}
-            style={styles.menuButton}
-          >
-            <MaterialIcons name="menu" size={24} color="#374151" />
-          </TouchableOpacity>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <TouchableOpacity
+              onPress={() => setSidebarVisible(true)}
+              style={styles.menuButton}
+            >
+              <MaterialIcons name="menu" size={24} color="#374151" />
+            </TouchableOpacity>
 
-          <View style={styles.headerLeft}>
-            <View style={styles.adminBadge}>
-              <MaterialIcons name="admin-panel-settings" size={24} color="#3b82f6" />
+            <View style={styles.headerLeft}>
+              <View style={styles.adminBadge}>
+                <MaterialIcons name="admin-panel-settings" size={24} color="#3b82f6" />
+              </View>
+              <View style={styles.headerText}>
+                <Text style={styles.welcomeText}>Welcome back,</Text>
+                <Text style={styles.userName}>{userName}</Text>
+                <Text style={styles.roleText}>System Administrator</Text>
+              </View>
             </View>
-            <View style={styles.headerText}>
-              <Text style={styles.welcomeText}>Welcome back,</Text>
-              <Text style={styles.userName}>{userName}</Text>
-              <Text style={styles.roleText}>System Administrator</Text>
-            </View>
-          </View>
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-            <MaterialIcons name="logout" size={20} color="#6b7280" />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <ScrollView
-        style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Statistics Overview */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>System Overview</Text>
-          <View style={styles.statsGrid}>
-            <Card style={styles.statCard}>
-              <View style={styles.statContent}>
-                <View style={[styles.statIcon, { backgroundColor: '#eff6ff' }]}>
-                  <MaterialIcons name="people" size={24} color="#3b82f6" />
-                </View>
-                <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{userStats.totalUsers}</Text>
-                  <Text style={styles.statLabel}>Total Users</Text>
-                </View>
-              </View>
-            </Card>
-
-            <Card style={styles.statCard}>
-              <View style={styles.statContent}>
-                <View style={[styles.statIcon, { backgroundColor: '#f0fdf4' }]}>
-                  <MaterialIcons name="check-circle" size={24} color="#10b981" />
-                </View>
-                <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{userStats.activeUsers}</Text>
-                  <Text style={styles.statLabel}>Active Users</Text>
-                </View>
-              </View>
-            </Card>
-
-            <Card style={styles.statCard}>
-              <View style={styles.statContent}>
-                <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
-                  <MaterialIcons name="local-shipping" size={24} color="#f59e0b" />
-                </View>
-                <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{userStats.drivers}</Text>
-                  <Text style={styles.statLabel}>Drivers</Text>
-                </View>
-              </View>
-            </Card>
-
-            <Card style={styles.statCard}>
-              <View style={styles.statContent}>
-                <View style={[styles.statIcon, { backgroundColor: '#fef2f2' }]}>
-                  <MaterialIcons name="pending-actions" size={24} color="#ef4444" />
-                </View>
-                <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{userStats.pendingApprovals}</Text>
-                  <Text style={styles.statLabel}>Pending</Text>
-                </View>
-              </View>
-            </Card>
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+              <MaterialIcons name="logout" size={20} color="#6b7280" />
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsGrid}>
-            {adminActions.map((action, index) => (
-              <TouchableOpacity
-                key={index}
-                onPress={() => navigation.navigate(action.screen)}
-                activeOpacity={0.7}
-              >
-                <Card style={styles.actionCard}>
-                  <View style={styles.actionContent}>
-                    <View style={[styles.actionIcon, { backgroundColor: action.bgColor }]}>
-                      <MaterialIcons name={action.icon as any} size={28} color={action.color} />
+        <ScrollView
+          style={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Statistics Overview */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>System Overview</Text>
+            <View style={styles.statsGrid}>
+              <Card style={styles.statCard}>
+                <View style={styles.statContent}>
+                  <View style={[styles.statIcon, { backgroundColor: '#eff6ff' }]}>
+                    <MaterialIcons name="people" size={24} color="#3b82f6" />
+                  </View>
+                  <View style={styles.statInfo}>
+                    <Text style={styles.statNumber}>{userStats.totalUsers}</Text>
+                    <Text style={styles.statLabel}>Total Users</Text>
+                  </View>
+                </View>
+              </Card>
+
+              <Card style={styles.statCard}>
+                <View style={styles.statContent}>
+                  <View style={[styles.statIcon, { backgroundColor: '#f0fdf4' }]}>
+                    <MaterialIcons name="check-circle" size={24} color="#10b981" />
+                  </View>
+                  <View style={styles.statInfo}>
+                    <Text style={styles.statNumber}>{userStats.activeUsers}</Text>
+                    <Text style={styles.statLabel}>Active Users</Text>
+                  </View>
+                </View>
+              </Card>
+
+              <Card style={styles.statCard}>
+                <View style={styles.statContent}>
+                  <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
+                    <MaterialIcons name="local-shipping" size={24} color="#f59e0b" />
+                  </View>
+                  <View style={styles.statInfo}>
+                    <Text style={styles.statNumber}>{userStats.drivers}</Text>
+                    <Text style={styles.statLabel}>Drivers</Text>
+                  </View>
+                </View>
+              </Card>
+
+              <Card style={styles.statCard}>
+                <View style={styles.statContent}>
+                  <View style={[styles.statIcon, { backgroundColor: '#fef2f2' }]}>
+                    <MaterialIcons name="pending-actions" size={24} color="#ef4444" />
+                  </View>
+                  <View style={styles.statInfo}>
+                    <Text style={styles.statNumber}>{userStats.pendingApprovals}</Text>
+                    <Text style={styles.statLabel}>Pending</Text>
+                  </View>
+                </View>
+              </Card>
+            </View>
+          </View>
+
+          {/* Quick Actions */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Administrative Functions</Text>
+
+            {/* Group actions by category */}
+            {["User Management", "Resource Management", "Assignment Management", "System Overview"].map((category) => {
+              const categoryActions = adminActions.filter(action => action.category === category)
+              if (categoryActions.length === 0) return null
+
+              return (
+                <View key={category} style={styles.categorySection}>
+                  <Text style={styles.categoryTitle}>{category}</Text>
+                  <View style={styles.actionsGrid}>
+                    {categoryActions.map((action, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        onPress={() => navigation.navigate(action.screen)}
+                        activeOpacity={0.7}
+                      >
+                        <Card style={styles.actionCard}>
+                          <View style={styles.actionContent}>
+                            <View style={[styles.actionIcon, { backgroundColor: action.bgColor }]}>
+                              <MaterialIcons name={action.icon as any} size={28} color={action.color} />
+                            </View>
+                            <View style={styles.actionInfo}>
+                              <Text style={styles.actionTitle}>{action.title}</Text>
+                              <Text style={styles.actionDescription}>{action.description}</Text>
+                            </View>
+                            <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
+                          </View>
+                        </Card>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )
+            })}
+          </View>
+
+          {/* Role Distribution */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>User Distribution</Text>
+            <Card style={styles.distributionCard}>
+              <View style={styles.distributionContent}>
+                <View style={styles.distributionItem}>
+                  <View style={styles.distributionRow}>
+                    <View style={styles.distributionLabel}>
+                      <View style={[styles.distributionDot, { backgroundColor: '#3b82f6' }]} />
+                      <Text style={styles.distributionText}>Administrators</Text>
                     </View>
-                    <View style={styles.actionInfo}>
-                      <Text style={styles.actionTitle}>{action.title}</Text>
-                      <Text style={styles.actionDescription}>{action.description}</Text>
+                    <Text style={styles.distributionValue}>{userStats.admins}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.distributionItem}>
+                  <View style={styles.distributionRow}>
+                    <View style={styles.distributionLabel}>
+                      <View style={[styles.distributionDot, { backgroundColor: '#8b5cf6' }]} />
+                      <Text style={styles.distributionText}>Contractors</Text>
                     </View>
-                    <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
+                    <Text style={styles.distributionValue}>{userStats.contractors}</Text>
                   </View>
-                </Card>
-              </TouchableOpacity>
-            ))}
+                </View>
+
+                <View style={styles.distributionItem}>
+                  <View style={styles.distributionRow}>
+                    <View style={styles.distributionLabel}>
+                      <View style={[styles.distributionDot, { backgroundColor: '#10b981' }]} />
+                      <Text style={styles.distributionText}>Swachh HR</Text>
+                    </View>
+                    <Text style={styles.distributionValue}>{userStats.swachhHR}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.distributionItem}>
+                  <View style={styles.distributionRow}>
+                    <View style={styles.distributionLabel}>
+                      <View style={[styles.distributionDot, { backgroundColor: '#f59e0b' }]} />
+                      <Text style={styles.distributionText}>Drivers</Text>
+                    </View>
+                    <Text style={styles.distributionValue}>{userStats.drivers}</Text>
+                  </View>
+                </View>
+              </View>
+            </Card>
           </View>
-        </View>
+        </ScrollView>
 
-        {/* Role Distribution */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>User Distribution</Text>
-          <Card style={styles.distributionCard}>
-            <View style={styles.distributionContent}>
-              <View style={styles.distributionItem}>
-                <View style={styles.distributionRow}>
-                  <View style={styles.distributionLabel}>
-                    <View style={[styles.distributionDot, { backgroundColor: '#3b82f6' }]} />
-                    <Text style={styles.distributionText}>Administrators</Text>
-                  </View>
-                  <Text style={styles.distributionValue}>{userStats.admins}</Text>
-                </View>
-              </View>
-
-              <View style={styles.distributionItem}>
-                <View style={styles.distributionRow}>
-                  <View style={styles.distributionLabel}>
-                    <View style={[styles.distributionDot, { backgroundColor: '#8b5cf6' }]} />
-                    <Text style={styles.distributionText}>Contractors</Text>
-                  </View>
-                  <Text style={styles.distributionValue}>{userStats.contractors}</Text>
-                </View>
-              </View>
-
-              <View style={styles.distributionItem}>
-                <View style={styles.distributionRow}>
-                  <View style={styles.distributionLabel}>
-                    <View style={[styles.distributionDot, { backgroundColor: '#10b981' }]} />
-                    <Text style={styles.distributionText}>Swachh HR</Text>
-                  </View>
-                  <Text style={styles.distributionValue}>{userStats.swachhHR}</Text>
-                </View>
-              </View>
-
-              <View style={styles.distributionItem}>
-                <View style={styles.distributionRow}>
-                  <View style={styles.distributionLabel}>
-                    <View style={[styles.distributionDot, { backgroundColor: '#f59e0b' }]} />
-                    <Text style={styles.distributionText}>Drivers</Text>
-                  </View>
-                  <Text style={styles.distributionValue}>{userStats.drivers}</Text>
-                </View>
-              </View>
-            </View>
-          </Card>
-        </View>
-      </ScrollView>
-
-      {/* Admin Sidebar */}
-      <AdminSidebar
-        navigation={navigation}
-        isVisible={sidebarVisible}
-        onClose={() => setSidebarVisible(false)}
-        currentScreen="AdminDashboard"
-      />
-    </SafeAreaView>
+        {/* Admin Sidebar */}
+        <AdminSidebar
+          navigation={navigation}
+          isVisible={sidebarVisible}
+          onClose={() => setSidebarVisible(false)}
+          currentScreen="AdminDashboard"
+        />
+      </SafeAreaView>
+    </ProtectedRoute>
   )
 }
 
@@ -453,6 +503,16 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   // Actions styles
+  categorySection: {
+    marginBottom: 20,
+  },
+  categoryTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 12,
+    paddingLeft: 4,
+  },
   actionsGrid: {
     gap: 12,
   },
@@ -469,6 +529,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
+    minHeight: 64,
   },
   actionIcon: {
     width: 48,
@@ -477,19 +538,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
+    flexShrink: 0,
   },
   actionInfo: {
     flex: 1,
+    marginRight: 8,
+    minWidth: 0,
   },
   actionTitle: {
     fontSize: 16,
     fontWeight: "600",
     color: "#111827",
     marginBottom: 2,
+    flexWrap: "wrap",
+    lineHeight: 20,
   },
   actionDescription: {
     fontSize: 14,
     color: "#6b7280",
+    flexWrap: "wrap",
+    lineHeight: 18,
   },
   // Distribution styles
   distributionCard: {

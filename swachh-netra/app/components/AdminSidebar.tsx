@@ -25,6 +25,14 @@ interface MenuItem {
   icon: string
   screen: string
   badge?: number
+  description?: string
+}
+
+interface MenuSection {
+  id: string
+  title: string
+  icon: string
+  items: MenuItem[]
 }
 
 const AdminSidebar: React.FC<AdminSidebarProps> = ({
@@ -35,67 +43,112 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
 }) => {
   const [slideAnim] = useState(new Animated.Value(-width * 0.8))
 
-  const menuItems: MenuItem[] = [
+  const menuSections: MenuSection[] = [
     {
-      id: "dashboard",
-      title: "Dashboard",
+      id: "overview",
+      title: "Overview",
       icon: "dashboard",
-      screen: "AdminDashboard",
+      items: [
+        {
+          id: "dashboard",
+          title: "Dashboard",
+          icon: "dashboard",
+          screen: "AdminDashboard",
+          description: "System overview & statistics"
+        },
+        {
+          id: "reports",
+          title: "Reports & Analytics",
+          icon: "analytics",
+          screen: "AdminReports",
+          description: "System analytics & insights"
+        }
+      ]
     },
     {
-      id: "users",
+      id: "user-management",
       title: "User Management",
       icon: "people",
-      screen: "UserManagement",
+      items: [
+        {
+          id: "users",
+          title: "All Users",
+          icon: "people",
+          screen: "UserManagement",
+          description: "Manage all system users"
+        },
+        {
+          id: "contractors",
+          title: "Contractors",
+          icon: "business",
+          screen: "ContractorManagement",
+          description: "Transport contractor management"
+        },
+        {
+          id: "drivers",
+          title: "Drivers",
+          icon: "person",
+          screen: "DriverManagement",
+          description: "Driver management & assignments"
+        }
+      ]
     },
     {
-      id: "feeder-points",
-      title: "Feeder Points",
-      icon: "location-on",
-      screen: "FeederPointManagement",
+      id: "resource-management",
+      title: "Resource Management",
+      icon: "inventory",
+      items: [
+        {
+          id: "feeder-points",
+          title: "Feeder Points",
+          icon: "add-location",
+          screen: "FeederPointManagement",
+          description: "Waste collection points"
+        },
+        {
+          id: "vehicles",
+          title: "Vehicles",
+          icon: "local-shipping",
+          screen: "VehicleManagement",
+          description: "Fleet management"
+        }
+      ]
     },
     {
       id: "assignments",
-      title: "Point Assignments",
+      title: "Assignment Management",
       icon: "assignment",
-      screen: "FeederPointAssignment",
+      items: [
+        {
+          id: "point-assignments",
+          title: "Point Assignments",
+          icon: "assignment",
+          screen: "FeederPointAssignment",
+          description: "Assign points to contractors"
+        },
+        {
+          id: "vehicle-assignments",
+          title: "Vehicle Assignments",
+          icon: "assignment-ind",
+          screen: "VehicleAssignment",
+          description: "Assign vehicles to contractors"
+        }
+      ]
     },
     {
-      id: "vehicles",
-      title: "Vehicle Management",
-      icon: "local-shipping",
-      screen: "VehicleManagement",
-    },
-    {
-      id: "vehicle-assignments",
-      title: "Vehicle Assignments",
-      icon: "assignment-ind",
-      screen: "VehicleAssignment",
-    },
-    {
-      id: "contractors",
-      title: "Contractors",
-      icon: "business",
-      screen: "ContractorManagement",
-    },
-    {
-      id: "drivers",
-      title: "Drivers",
-      icon: "local-shipping",
-      screen: "DriverManagement",
-    },
-    {
-      id: "reports",
-      title: "Reports & Analytics",
-      icon: "analytics",
-      screen: "AdminReports",
-    },
-    {
-      id: "settings",
-      title: "System Settings",
+      id: "system",
+      title: "System",
       icon: "settings",
-      screen: "AdminSettings",
-    },
+      items: [
+        {
+          id: "settings",
+          title: "Settings",
+          icon: "settings",
+          screen: "AdminSettings",
+          description: "System configuration"
+        }
+      ]
+    }
   ]
 
   React.useEffect(() => {
@@ -127,7 +180,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
         activeOpacity={1}
         onPress={onClose}
       />
-      
+
       {/* Sidebar */}
       <Animated.View
         style={[
@@ -155,99 +208,57 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
         {/* Menu Items */}
         <View style={styles.menuContainer}>
-          <Text style={styles.menuSectionTitle}>MAIN MENU</Text>
-          
-          {menuItems.slice(0, 4).map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[
-                styles.menuItem,
-                isCurrentScreen(item.screen) && styles.activeMenuItem,
-              ]}
-              onPress={() => handleMenuPress(item.screen)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.menuItemContent}>
+          {menuSections.map((section) => (
+            <View key={section.id} style={styles.menuSection}>
+              <View style={styles.sectionHeader}>
                 <MaterialIcons
-                  name={item.icon as any}
-                  size={22}
-                  color={isCurrentScreen(item.screen) ? "#3b82f6" : "#6b7280"}
+                  name={section.icon as any}
+                  size={18}
+                  color="#3b82f6"
                 />
-                <Text
-                  style={[
-                    styles.menuItemText,
-                    isCurrentScreen(item.screen) && styles.activeMenuItemText,
-                  ]}
-                >
-                  {item.title}
-                </Text>
+                <Text style={styles.menuSectionTitle}>{section.title.toUpperCase()}</Text>
               </View>
-              {item.badge && (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{item.badge}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
 
-          <Text style={styles.menuSectionTitle}>MANAGEMENT</Text>
-          
-          {menuItems.slice(4, 6).map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[
-                styles.menuItem,
-                isCurrentScreen(item.screen) && styles.activeMenuItem,
-              ]}
-              onPress={() => handleMenuPress(item.screen)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.menuItemContent}>
-                <MaterialIcons
-                  name={item.icon as any}
-                  size={22}
-                  color={isCurrentScreen(item.screen) ? "#3b82f6" : "#6b7280"}
-                />
-                <Text
+              {section.items.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
                   style={[
-                    styles.menuItemText,
-                    isCurrentScreen(item.screen) && styles.activeMenuItemText,
+                    styles.menuItem,
+                    isCurrentScreen(item.screen) && styles.activeMenuItem,
                   ]}
+                  onPress={() => handleMenuPress(item.screen)}
+                  activeOpacity={0.7}
                 >
-                  {item.title}
-                </Text>
-              </View>
-            </TouchableOpacity>
-          ))}
-
-          <Text style={styles.menuSectionTitle}>SYSTEM</Text>
-          
-          {menuItems.slice(6).map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[
-                styles.menuItem,
-                isCurrentScreen(item.screen) && styles.activeMenuItem,
-              ]}
-              onPress={() => handleMenuPress(item.screen)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.menuItemContent}>
-                <MaterialIcons
-                  name={item.icon as any}
-                  size={22}
-                  color={isCurrentScreen(item.screen) ? "#3b82f6" : "#6b7280"}
-                />
-                <Text
-                  style={[
-                    styles.menuItemText,
-                    isCurrentScreen(item.screen) && styles.activeMenuItemText,
-                  ]}
-                >
-                  {item.title}
-                </Text>
-              </View>
-            </TouchableOpacity>
+                  <View style={styles.menuItemContent}>
+                    <MaterialIcons
+                      name={item.icon as any}
+                      size={22}
+                      color={isCurrentScreen(item.screen) ? "#3b82f6" : "#6b7280"}
+                    />
+                    <View style={styles.menuItemTextContainer}>
+                      <Text
+                        style={[
+                          styles.menuItemText,
+                          isCurrentScreen(item.screen) && styles.activeMenuItemText,
+                        ]}
+                      >
+                        {item.title}
+                      </Text>
+                      {item.description && (
+                        <Text style={styles.menuItemDescription}>
+                          {item.description}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  {item.badge && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{item.badge}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
           ))}
         </View>
 
@@ -332,14 +343,22 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingTop: 20,
   },
+  menuSection: {
+    marginBottom: 8,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginBottom: 4,
+  },
   menuSectionTitle: {
     fontSize: 12,
-    fontWeight: "600",
-    color: "#9ca3af",
-    letterSpacing: 0.5,
-    marginLeft: 20,
-    marginBottom: 12,
-    marginTop: 20,
+    fontWeight: "700",
+    color: "#6b7280",
+    letterSpacing: 0.8,
+    marginLeft: 8,
   },
   menuItem: {
     flexDirection: "row",
@@ -358,11 +377,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
+  menuItemTextContainer: {
+    flex: 1,
+    marginLeft: 12,
+  },
   menuItemText: {
     fontSize: 15,
     fontWeight: "500",
     color: "#374151",
-    marginLeft: 12,
+    lineHeight: 20,
+  },
+  menuItemDescription: {
+    fontSize: 12,
+    color: "#9ca3af",
+    marginTop: 2,
+    lineHeight: 16,
   },
   activeMenuItemText: {
     color: "#3b82f6",

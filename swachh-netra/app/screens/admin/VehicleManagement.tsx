@@ -15,21 +15,38 @@ import { MaterialIcons } from "@expo/vector-icons"
 import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 import AdminSidebar from "../../components/AdminSidebar"
 import { VehicleService, Vehicle } from "../../../services/VehicleService"
+import ProtectedRoute from "../../components/ProtectedRoute"
+import { useRequireAdmin } from "../../hooks/useRequireAuth"
 
 const VehicleManagement = ({ navigation }: any) => {
+  const { hasAccess, userData } = useRequireAdmin(navigation)
   const [sidebarVisible, setSidebarVisible] = useState(false)
   const [loading, setLoading] = useState(false)
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null)
-  
+
   // Form state
   const [formData, setFormData] = useState({
     vehicleNumber: "",
     capacity: "",
     vehicleType: "",
     status: "active" as Vehicle["status"],
+    manufacturer: "",
+    model: "",
+    year: "",
+    fuelType: "diesel",
   })
+
+  const vehicleTypes = [
+    { value: "truck", label: "Truck", minCapacity: 5, maxCapacity: 20 },
+    { value: "van", label: "Van", minCapacity: 2, maxCapacity: 8 },
+    { value: "compactor", label: "Compactor", minCapacity: 10, maxCapacity: 25 },
+    { value: "tipper", label: "Tipper", minCapacity: 8, maxCapacity: 15 },
+  ]
+
+  const fuelTypes = ["diesel", "petrol", "cng", "electric"]
+  const statusOptions = ["active", "inactive", "maintenance"]
 
   useEffect(() => {
     fetchVehicles()
@@ -38,12 +55,17 @@ const VehicleManagement = ({ navigation }: any) => {
   const fetchVehicles = async () => {
     try {
       console.log("Fetching vehicles...")
+      setLoading(true)
       const vehicleList = await VehicleService.getAllVehicles()
       console.log("Fetched vehicles:", vehicleList.length)
+      console.log("Vehicle data sample:", vehicleList[0])
       setVehicles(vehicleList)
     } catch (error) {
       console.error("Error fetching vehicles:", error)
+      console.error("Error details:", error)
       Alert.alert("Error", `Failed to fetch vehicles: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -64,6 +86,33 @@ const VehicleManagement = ({ navigation }: any) => {
       Alert.alert("Validation Error", "Vehicle type is required")
       return false
     }
+
+    // Validate capacity based on vehicle type
+    const selectedType = vehicleTypes.find(type => type.value === formData.vehicleType)
+    const capacity = Number(formData.capacity)
+
+    if (capacity <= 0) {
+      Alert.alert("Validation Error", "Capacity must be greater than 0")
+      return false
+    }
+
+    if (selectedType) {
+      if (capacity < selectedType.minCapacity || capacity > selectedType.maxCapacity) {
+        Alert.alert(
+          "Validation Error",
+          `${selectedType.label} capacity must be between ${selectedType.minCapacity} and ${selectedType.maxCapacity} tons`
+        )
+        return false
+      }
+    }
+
+    // Validate vehicle number format (basic check)
+    const vehicleNumberRegex = /^[A-Z]{2}[0-9]{2}[A-Z]{1,2}[0-9]{4}$/
+    if (!vehicleNumberRegex.test(formData.vehicleNumber.trim().toUpperCase())) {
+      Alert.alert("Validation Error", "Please enter a valid vehicle number (e.g., MH12AB1234)")
+      return false
+    }
+
     return true
   }
 
@@ -73,15 +122,22 @@ const VehicleManagement = ({ navigation }: any) => {
     try {
       setLoading(true)
       console.log("Saving vehicle...")
-      
+
       const user = FIREBASE_AUTH.currentUser
       const vehicleData = {
         vehicleNumber: formData.vehicleNumber.trim().toUpperCase(),
         capacity: Number(formData.capacity),
         vehicleType: formData.vehicleType.trim(),
         status: formData.status,
+        manufacturer: formData.manufacturer.trim(),
+        model: formData.model.trim(),
+        year: formData.year ? Number(formData.year) : new Date().getFullYear(),
+        fuelType: formData.fuelType,
         registrationDate: new Date(),
         createdBy: user?.uid || "admin",
+        isActive: formData.status === "active",
+        lastMaintenanceDate: null,
+        nextMaintenanceDate: null,
       }
 
       if (editingVehicle) {
@@ -92,7 +148,7 @@ const VehicleManagement = ({ navigation }: any) => {
         console.log("Vehicle created with ID:", vehicleId)
         Alert.alert("Success", "Vehicle created successfully")
       }
-      
+
       // Reset form and refresh list
       setShowForm(false)
       setEditingVehicle(null)
@@ -101,6 +157,10 @@ const VehicleManagement = ({ navigation }: any) => {
         capacity: "",
         vehicleType: "",
         status: "active",
+        manufacturer: "",
+        model: "",
+        year: "",
+        fuelType: "diesel",
       })
       fetchVehicles()
     } catch (error) {
@@ -118,6 +178,10 @@ const VehicleManagement = ({ navigation }: any) => {
       capacity: vehicle.capacity.toString(),
       vehicleType: vehicle.vehicleType,
       status: vehicle.status,
+      manufacturer: (vehicle as any).manufacturer || "",
+      model: (vehicle as any).model || "",
+      year: (vehicle as any).year ? (vehicle as any).year.toString() : "",
+      fuelType: (vehicle as any).fuelType || "diesel",
     })
     setShowForm(true)
   }
@@ -128,9 +192,9 @@ const VehicleManagement = ({ navigation }: any) => {
       `Are you sure you want to delete vehicle ${vehicle.vehicleNumber}?`,
       [
         { text: "Cancel", style: "cancel" },
-        { 
-          text: "Delete", 
-          style: "destructive", 
+        {
+          text: "Delete",
+          style: "destructive",
           onPress: async () => {
             try {
               setLoading(true)
@@ -174,7 +238,7 @@ const VehicleManagement = ({ navigation }: any) => {
             <Text style={styles.vehicleNumber}>{item.vehicleNumber}</Text>
             <Text style={styles.vehicleType}>{item.vehicleType}</Text>
           </View>
-          <Chip 
+          <Chip
             style={[styles.statusChip, { backgroundColor: `${getStatusColor(item.status)}20` }]}
             textStyle={[styles.statusChipText, { color: getStatusColor(item.status) }]}
             icon={getStatusIcon(item.status)}
@@ -182,7 +246,7 @@ const VehicleManagement = ({ navigation }: any) => {
             {item.status.toUpperCase()}
           </Chip>
         </View>
-        
+
         <View style={styles.vehicleDetails}>
           <View style={styles.detailItem}>
             <MaterialIcons name="local-shipping" size={16} color="#6b7280" />
@@ -220,198 +284,200 @@ const VehicleManagement = ({ navigation }: any) => {
   )
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity 
-            onPress={() => setSidebarVisible(true)} 
-            style={styles.menuButton}
-          >
-            <MaterialIcons name="menu" size={24} color="#374151" />
-          </TouchableOpacity>
-          
-          <View style={styles.headerLeft}>
-            <TouchableOpacity 
-              onPress={() => navigation.goBack()} 
-              style={styles.backButton}
+    <ProtectedRoute requiredRole="admin" navigation={navigation}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <TouchableOpacity
+              onPress={() => setSidebarVisible(true)}
+              style={styles.menuButton}
             >
-              <MaterialIcons name="arrow-back" size={24} color="#374151" />
+              <MaterialIcons name="menu" size={24} color="#374151" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Vehicle Management</Text>
+
+            <View style={styles.headerLeft}>
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                style={styles.backButton}
+              >
+                <MaterialIcons name="arrow-back" size={24} color="#374151" />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Vehicle Management</Text>
+            </View>
           </View>
         </View>
-      </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Statistics Cards */}
-        <View style={styles.statsContainer}>
-          <Card style={styles.statsCard}>
-            <View style={styles.statsContent}>
-              <MaterialIcons name="local-shipping" size={32} color="#3b82f6" />
-              <Text style={styles.statsNumber}>{vehicles.length}</Text>
-              <Text style={styles.statsLabel}>Total Vehicles</Text>
-            </View>
-          </Card>
-          
-          <Card style={styles.statsCard}>
-            <View style={styles.statsContent}>
-              <MaterialIcons name="check-circle" size={32} color="#10b981" />
-              <Text style={styles.statsNumber}>
-                {vehicles.filter(v => v.status === "active").length}
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Statistics Cards */}
+          <View style={styles.statsContainer}>
+            <Card style={styles.statsCard}>
+              <View style={styles.statsContent}>
+                <MaterialIcons name="local-shipping" size={32} color="#3b82f6" />
+                <Text style={styles.statsNumber}>{vehicles.length}</Text>
+                <Text style={styles.statsLabel}>Total Vehicles</Text>
+              </View>
+            </Card>
+
+            <Card style={styles.statsCard}>
+              <View style={styles.statsContent}>
+                <MaterialIcons name="check-circle" size={32} color="#10b981" />
+                <Text style={styles.statsNumber}>
+                  {vehicles.filter(v => v.status === "active").length}
+                </Text>
+                <Text style={styles.statsLabel}>Active</Text>
+              </View>
+            </Card>
+
+            <Card style={styles.statsCard}>
+              <View style={styles.statsContent}>
+                <MaterialIcons name="build" size={32} color="#f59e0b" />
+                <Text style={styles.statsNumber}>
+                  {vehicles.filter(v => v.status === "maintenance").length}
+                </Text>
+                <Text style={styles.statsLabel}>Maintenance</Text>
+              </View>
+            </Card>
+          </View>
+
+          {/* Vehicle Form */}
+          {showForm && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>
+                {editingVehicle ? "Edit Vehicle" : "Add New Vehicle"}
               </Text>
-              <Text style={styles.statsLabel}>Active</Text>
-            </View>
-          </Card>
-          
-          <Card style={styles.statsCard}>
-            <View style={styles.statsContent}>
-              <MaterialIcons name="build" size={32} color="#f59e0b" />
-              <Text style={styles.statsNumber}>
-                {vehicles.filter(v => v.status === "maintenance").length}
-              </Text>
-              <Text style={styles.statsLabel}>Maintenance</Text>
-            </View>
-          </Card>
-        </View>
 
-        {/* Vehicle Form */}
-        {showForm && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              {editingVehicle ? "Edit Vehicle" : "Add New Vehicle"}
-            </Text>
-            
-            <Card style={styles.formCard}>
-              <View style={styles.cardContent}>
-                <TextInput
-                  label="Vehicle Number *"
-                  value={formData.vehicleNumber}
-                  onChangeText={(text) => updateFormField("vehicleNumber", text)}
-                  style={styles.input}
-                  mode="outlined"
-                  placeholder="e.g., MH12AB1234"
-                  autoCapitalize="characters"
-                />
-                
-                <TextInput
-                  label="Capacity (tons) *"
-                  value={formData.capacity}
-                  onChangeText={(text) => updateFormField("capacity", text)}
-                  style={styles.input}
-                  mode="outlined"
-                  keyboardType="numeric"
-                  placeholder="e.g., 5"
-                />
-                
-                <TextInput
-                  label="Vehicle Type *"
-                  value={formData.vehicleType}
-                  onChangeText={(text) => updateFormField("vehicleType", text)}
-                  style={styles.input}
-                  mode="outlined"
-                  placeholder="e.g., Garbage Truck, Compactor"
-                />
+              <Card style={styles.formCard}>
+                <View style={styles.cardContent}>
+                  <TextInput
+                    label="Vehicle Number *"
+                    value={formData.vehicleNumber}
+                    onChangeText={(text) => updateFormField("vehicleNumber", text)}
+                    style={styles.input}
+                    mode="outlined"
+                    placeholder="e.g., MH12AB1234"
+                    autoCapitalize="characters"
+                  />
 
-                <View style={styles.statusContainer}>
-                  <Text style={styles.statusLabel}>Status</Text>
-                  <View style={styles.statusButtons}>
-                    {(["active", "maintenance", "inactive"] as Vehicle["status"][]).map((status) => (
-                      <TouchableOpacity
-                        key={status}
-                        style={[
-                          styles.statusButton,
-                          formData.status === status && styles.statusButtonActive
-                        ]}
-                        onPress={() => updateFormField("status", status)}
-                      >
-                        <Text style={[
-                          styles.statusButtonText,
-                          formData.status === status && styles.statusButtonTextActive
-                        ]}>
-                          {status.charAt(0).toUpperCase() + status.slice(1)}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                  <TextInput
+                    label="Capacity (tons) *"
+                    value={formData.capacity}
+                    onChangeText={(text) => updateFormField("capacity", text)}
+                    style={styles.input}
+                    mode="outlined"
+                    keyboardType="numeric"
+                    placeholder="e.g., 5"
+                  />
+
+                  <TextInput
+                    label="Vehicle Type *"
+                    value={formData.vehicleType}
+                    onChangeText={(text) => updateFormField("vehicleType", text)}
+                    style={styles.input}
+                    mode="outlined"
+                    placeholder="e.g., Garbage Truck, Compactor"
+                  />
+
+                  <View style={styles.statusContainer}>
+                    <Text style={styles.statusLabel}>Status</Text>
+                    <View style={styles.statusButtons}>
+                      {(["active", "maintenance", "inactive"] as Vehicle["status"][]).map((status) => (
+                        <TouchableOpacity
+                          key={status}
+                          style={[
+                            styles.statusButton,
+                            formData.status === status && styles.statusButtonActive
+                          ]}
+                          onPress={() => updateFormField("status", status)}
+                        >
+                          <Text style={[
+                            styles.statusButtonText,
+                            formData.status === status && styles.statusButtonTextActive
+                          ]}>
+                            {status.charAt(0).toUpperCase() + status.slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+
+                  <View style={styles.formActions}>
+                    <Button
+                      mode="outlined"
+                      onPress={() => {
+                        setShowForm(false)
+                        setEditingVehicle(null)
+                        setFormData({
+                          vehicleNumber: "",
+                          capacity: "",
+                          vehicleType: "",
+                          status: "active",
+                        })
+                      }}
+                      style={styles.cancelButton}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      mode="contained"
+                      onPress={saveVehicle}
+                      loading={loading}
+                      style={styles.saveButton}
+                      icon="save"
+                    >
+                      {editingVehicle ? "Update Vehicle" : "Create Vehicle"}
+                    </Button>
                   </View>
                 </View>
-
-                <View style={styles.formActions}>
-                  <Button
-                    mode="outlined"
-                    onPress={() => {
-                      setShowForm(false)
-                      setEditingVehicle(null)
-                      setFormData({
-                        vehicleNumber: "",
-                        capacity: "",
-                        vehicleType: "",
-                        status: "active",
-                      })
-                    }}
-                    style={styles.cancelButton}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    mode="contained"
-                    onPress={saveVehicle}
-                    loading={loading}
-                    style={styles.saveButton}
-                    icon="save"
-                  >
-                    {editingVehicle ? "Update Vehicle" : "Create Vehicle"}
-                  </Button>
-                </View>
-              </View>
-            </Card>
-          </View>
-        )}
-
-        {/* Vehicles List */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Registered Vehicles</Text>
-          
-          {vehicles.length > 0 ? (
-            <FlatList
-              data={vehicles}
-              renderItem={renderVehicleCard}
-              keyExtractor={(item) => item.id || ""}
-              scrollEnabled={false}
-              showsVerticalScrollIndicator={false}
-            />
-          ) : (
-            <Card style={styles.emptyCard}>
-              <View style={styles.emptyContent}>
-                <MaterialIcons name="local-shipping" size={48} color="#9ca3af" />
-                <Text style={styles.emptyText}>No vehicles registered</Text>
-                <Text style={styles.emptySubtext}>
-                  Add your first garbage vehicle to get started
-                </Text>
-              </View>
-            </Card>
+              </Card>
+            </View>
           )}
-        </View>
-      </ScrollView>
 
-      {/* Floating Action Button */}
-      <FAB
-        style={styles.fab}
-        icon="plus"
-        onPress={() => setShowForm(true)}
-        label="Add Vehicle"
-      />
+          {/* Vehicles List */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Registered Vehicles</Text>
 
-      {/* Admin Sidebar */}
-      <AdminSidebar
-        navigation={navigation}
-        isVisible={sidebarVisible}
-        onClose={() => setSidebarVisible(false)}
-        currentScreen="VehicleManagement"
-      />
-    </SafeAreaView>
+            {vehicles.length > 0 ? (
+              <FlatList
+                data={vehicles}
+                renderItem={renderVehicleCard}
+                keyExtractor={(item) => item.id || ""}
+                scrollEnabled={false}
+                showsVerticalScrollIndicator={false}
+              />
+            ) : (
+              <Card style={styles.emptyCard}>
+                <View style={styles.emptyContent}>
+                  <MaterialIcons name="local-shipping" size={48} color="#9ca3af" />
+                  <Text style={styles.emptyText}>No vehicles registered</Text>
+                  <Text style={styles.emptySubtext}>
+                    Add your first garbage vehicle to get started
+                  </Text>
+                </View>
+              </Card>
+            )}
+          </View>
+        </ScrollView>
+
+        {/* Floating Action Button */}
+        <FAB
+          style={styles.fab}
+          icon="plus"
+          onPress={() => setShowForm(true)}
+          label="Add Vehicle"
+        />
+
+        {/* Admin Sidebar */}
+        <AdminSidebar
+          navigation={navigation}
+          isVisible={sidebarVisible}
+          onClose={() => setSidebarVisible(false)}
+          currentScreen="VehicleManagement"
+        />
+      </SafeAreaView>
+    </ProtectedRoute>
   )
 }
 

@@ -30,6 +30,8 @@ import {
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { FIREBASE_AUTH, FIRESTORE_DB } from '../../../FirebaseConfig';
 import { ApprovalService } from '../../../services/ApprovalService';
+import ProtectedRoute from '../../components/ProtectedRoute';
+import { useRequireAdmin } from '../../hooks/useRequireAuth';
 
 const { width, height } = Dimensions.get('window');
 
@@ -57,11 +59,18 @@ interface ApprovalRequest {
 }
 
 const UserManagement = ({ navigation }: any) => {
+    const { hasAccess, userData } = useRequireAdmin(navigation);
     const [refreshing, setRefreshing] = useState(false);
     const [loading, setLoading] = useState(true);
     const [users, setUsers] = useState<User[]>([]);
     const [approvalRequests, setApprovalRequests] = useState<ApprovalRequest[]>([]);
     const [selectedTab, setSelectedTab] = useState('overview');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [roleFilter, setRoleFilter] = useState<string>('all');
+    const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [showRoleModal, setShowRoleModal] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<User | null>(null);
+    const [newRole, setNewRole] = useState('');
     const [userStats, setUserStats] = useState({
         totalUsers: 0,
         activeUsers: 0,
@@ -104,7 +113,7 @@ const UserManagement = ({ navigation }: any) => {
             })) as User[];
 
             setUsers(usersList);
-            
+
             // Calculate stats
             const stats = {
                 totalUsers: usersList.length,
@@ -115,7 +124,7 @@ const UserManagement = ({ navigation }: any) => {
                 admins: usersList.filter(u => u.role === 'admin').length,
                 pendingApprovals: 0 // Will be updated when fetching approval requests
             };
-            
+
             setUserStats(prev => ({ ...prev, ...stats }));
         } catch (error) {
             console.error('Error fetching users:', error);
@@ -190,6 +199,31 @@ const UserManagement = ({ navigation }: any) => {
         } catch (error) {
             console.error('Error updating user status:', error);
             Alert.alert('Error', 'Failed to update user status');
+        }
+    };
+
+    const openRoleModal = (user: User) => {
+        setSelectedUser(user);
+        setNewRole(user.role);
+        setShowRoleModal(true);
+    };
+
+    const updateUserRole = async () => {
+        if (!selectedUser || !newRole) return;
+
+        try {
+            await updateDoc(doc(FIRESTORE_DB, 'users', selectedUser.id), {
+                role: newRole,
+                updatedAt: new Date().toISOString()
+            });
+            Alert.alert('Success', 'User role updated successfully.');
+            setShowRoleModal(false);
+            setSelectedUser(null);
+            setNewRole('');
+            fetchUsers();
+        } catch (error) {
+            console.error('Error updating user role:', error);
+            Alert.alert('Error', 'Failed to update user role');
         }
     };
 
@@ -271,7 +305,7 @@ const UserManagement = ({ navigation }: any) => {
                                 <Text style={styles.requestName}>{request.fullName}</Text>
                                 <Text style={styles.requestRole}>
                                     {request.role === 'transport_contractor' ? 'Transport Contractor' :
-                                     request.role === 'swachh_hr' ? 'Swachh HR' : request.role}
+                                        request.role === 'swachh_hr' ? 'Swachh HR' : request.role}
                                 </Text>
                             </View>
                             <View style={styles.requestBadge}>
@@ -318,17 +352,89 @@ const UserManagement = ({ navigation }: any) => {
         </View>
     );
 
+    const filteredUsers = users.filter(user => {
+        const searchLower = searchQuery.toLowerCase();
+        const matchesSearch = (user.fullName || '').toLowerCase().includes(searchLower) ||
+            (user.email || '').toLowerCase().includes(searchLower) ||
+            (user.phone || '').toLowerCase().includes(searchLower);
+        const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+        const matchesStatus = statusFilter === 'all' ||
+            (statusFilter === 'active' && user.isActive) ||
+            (statusFilter === 'inactive' && !user.isActive);
+        return matchesSearch && matchesRole && matchesStatus;
+    });
+
     const renderUsersTab = () => (
         <View style={styles.tabContent}>
-            {users.map((user) => (
+            {/* Search and Filters */}
+            <View style={styles.filtersContainer}>
+                <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search users..."
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                />
+                <View style={styles.filterRow}>
+                    <View style={styles.filterGroup}>
+                        <Text style={styles.filterLabel}>Role:</Text>
+                        <View style={styles.filterButtons}>
+                            {['all', 'admin', 'transport_contractor', 'swachh_hr', 'driver'].map((role) => (
+                                <TouchableOpacity
+                                    key={role}
+                                    style={[
+                                        styles.filterButton,
+                                        roleFilter === role && styles.activeFilterButton
+                                    ]}
+                                    onPress={() => setRoleFilter(role)}
+                                >
+                                    <Text style={[
+                                        styles.filterButtonText,
+                                        roleFilter === role && styles.activeFilterButtonText
+                                    ]}>
+                                        {role === 'all' ? 'All' :
+                                            role === 'transport_contractor' ? 'Contractor' :
+                                                role === 'swachh_hr' ? 'HR' :
+                                                    role.charAt(0).toUpperCase() + role.slice(1)}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                    <View style={styles.filterGroup}>
+                        <Text style={styles.filterLabel}>Status:</Text>
+                        <View style={styles.filterButtons}>
+                            {['all', 'active', 'inactive'].map((status) => (
+                                <TouchableOpacity
+                                    key={status}
+                                    style={[
+                                        styles.filterButton,
+                                        statusFilter === status && styles.activeFilterButton
+                                    ]}
+                                    onPress={() => setStatusFilter(status)}
+                                >
+                                    <Text style={[
+                                        styles.filterButtonText,
+                                        statusFilter === status && styles.activeFilterButtonText
+                                    ]}>
+                                        {status.charAt(0).toUpperCase() + status.slice(1)}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    </View>
+                </View>
+            </View>
+
+            {/* Users List */}
+            {filteredUsers.map((user) => (
                 <Card key={user.id} style={styles.userCard}>
                     <View style={styles.userHeader}>
                         <View style={styles.userInfo}>
                             <Text style={styles.userName}>{user.fullName}</Text>
                             <Text style={styles.userRole}>
                                 {user.role === 'transport_contractor' ? 'Transport Contractor' :
-                                 user.role === 'swachh_hr' ? 'Swachh HR' :
-                                 user.role === 'admin' ? 'Administrator' : user.role}
+                                    user.role === 'swachh_hr' ? 'Swachh HR' :
+                                        user.role === 'admin' ? 'Administrator' : user.role}
                             </Text>
                         </View>
                         <View style={[
@@ -363,6 +469,13 @@ const UserManagement = ({ navigation }: any) => {
 
                     <View style={styles.userActions}>
                         <TouchableOpacity
+                            style={styles.roleButton}
+                            onPress={() => openRoleModal(user)}
+                        >
+                            <MaterialIcons name="edit" size={20} color="#3b82f6" />
+                            <Text style={styles.roleButtonText}>Change Role</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
                             style={[
                                 styles.statusButton,
                                 user.isActive ? styles.deactivateButton : styles.activateButton
@@ -385,60 +498,116 @@ const UserManagement = ({ navigation }: any) => {
     );
 
     return (
-        <View style={styles.container}>
-            <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+        <ProtectedRoute requiredRole="admin" navigation={navigation}>
+            <View style={styles.container}>
+                <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={() => navigation.goBack()}
+                {/* Header */}
+                <View style={styles.header}>
+                    <TouchableOpacity
+                        style={styles.backButton}
+                        onPress={() => navigation.goBack()}
+                    >
+                        <MaterialIcons name="arrow-back" size={24} color="#374151" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>User Management</Text>
+                    <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
+                        <MaterialIcons name="refresh" size={24} color="#374151" />
+                    </TouchableOpacity>
+                </View>
+
+                {/* Tab Navigation */}
+                <View style={styles.tabContainer}>
+                    <TouchableOpacity
+                        style={[styles.tab, selectedTab === 'overview' && styles.activeTab]}
+                        onPress={() => setSelectedTab('overview')}
+                    >
+                        <Text style={[styles.tabText, selectedTab === 'overview' && styles.activeTabText]}>
+                            Overview
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.tab, selectedTab === 'approvals' && styles.activeTab]}
+                        onPress={() => setSelectedTab('approvals')}
+                    >
+                        <Text style={[styles.tabText, selectedTab === 'approvals' && styles.activeTabText]}>
+                            Approvals ({userStats.pendingApprovals})
+                        </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.tab, selectedTab === 'users' && styles.activeTab]}
+                        onPress={() => setSelectedTab('users')}
+                    >
+                        <Text style={[styles.tabText, selectedTab === 'users' && styles.activeTabText]}>
+                            All Users
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+
+                <ScrollView
+                    style={styles.content}
+                    refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
                 >
-                    <MaterialIcons name="arrow-back" size={24} color="#374151" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>User Management</Text>
-                <TouchableOpacity style={styles.refreshButton} onPress={onRefresh}>
-                    <MaterialIcons name="refresh" size={24} color="#374151" />
-                </TouchableOpacity>
+                    {selectedTab === 'overview' && renderOverviewTab()}
+                    {selectedTab === 'approvals' && renderApprovalsTab()}
+                    {selectedTab === 'users' && renderUsersTab()}
+                </ScrollView>
+
+                {/* Role Change Modal */}
+                <Modal
+                    visible={showRoleModal}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setShowRoleModal(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>Change User Role</Text>
+                            <Text style={styles.modalSubtitle}>
+                                {selectedUser?.fullName} ({selectedUser?.email})
+                            </Text>
+
+                            <View style={styles.roleOptions}>
+                                {['admin', 'transport_contractor', 'swachh_hr', 'driver'].map((role) => (
+                                    <TouchableOpacity
+                                        key={role}
+                                        style={[
+                                            styles.roleOption,
+                                            newRole === role && styles.selectedRoleOption
+                                        ]}
+                                        onPress={() => setNewRole(role)}
+                                    >
+                                        <Text style={[
+                                            styles.roleOptionText,
+                                            newRole === role && styles.selectedRoleOptionText
+                                        ]}>
+                                            {role === 'transport_contractor' ? 'Transport Contractor' :
+                                                role === 'swachh_hr' ? 'Swachh HR' :
+                                                    role.charAt(0).toUpperCase() + role.slice(1)}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            <View style={styles.modalActions}>
+                                <TouchableOpacity
+                                    style={styles.cancelButton}
+                                    onPress={() => setShowRoleModal(false)}
+                                >
+                                    <Text style={styles.cancelButtonText}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.confirmButton}
+                                    onPress={updateUserRole}
+                                >
+                                    <Text style={styles.confirmButtonText}>Update Role</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
             </View>
-
-            {/* Tab Navigation */}
-            <View style={styles.tabContainer}>
-                <TouchableOpacity
-                    style={[styles.tab, selectedTab === 'overview' && styles.activeTab]}
-                    onPress={() => setSelectedTab('overview')}
-                >
-                    <Text style={[styles.tabText, selectedTab === 'overview' && styles.activeTabText]}>
-                        Overview
-                    </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, selectedTab === 'approvals' && styles.activeTab]}
-                    onPress={() => setSelectedTab('approvals')}
-                >
-                    <Text style={[styles.tabText, selectedTab === 'approvals' && styles.activeTabText]}>
-                        Approvals ({userStats.pendingApprovals})
-                    </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, selectedTab === 'users' && styles.activeTab]}
-                    onPress={() => setSelectedTab('users')}
-                >
-                    <Text style={[styles.tabText, selectedTab === 'users' && styles.activeTabText]}>
-                        All Users
-                    </Text>
-                </TouchableOpacity>
-            </View>
-
-            <ScrollView
-                style={styles.content}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-            >
-                {selectedTab === 'overview' && renderOverviewTab()}
-                {selectedTab === 'approvals' && renderApprovalsTab()}
-                {selectedTab === 'users' && renderUsersTab()}
-            </ScrollView>
-        </View>
+        </ProtectedRoute>
     );
 };
 
@@ -698,6 +867,27 @@ const styles = StyleSheet.create({
     },
     userActions: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingBottom: 16,
+        paddingTop: 8,
+        borderTopWidth: 1,
+        borderTopColor: '#f3f4f6',
+    },
+    roleButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#3b82f6',
+    },
+    roleButtonText: {
+        fontSize: 14,
+        color: '#3b82f6',
+        fontWeight: '500',
+        marginLeft: 4,
     },
     statusButton: {
         flex: 1,
@@ -717,6 +907,137 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontWeight: 'bold',
         marginLeft: 4,
+    },
+    // Filter styles
+    filtersContainer: {
+        padding: 16,
+        backgroundColor: '#f9fafb',
+        borderBottomWidth: 1,
+        borderBottomColor: '#e5e7eb',
+    },
+    searchInput: {
+        borderWidth: 1,
+        borderColor: '#d1d5db',
+        borderRadius: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        marginBottom: 12,
+        backgroundColor: '#ffffff',
+    },
+    filterRow: {
+        gap: 12,
+    },
+    filterGroup: {
+        marginBottom: 8,
+    },
+    filterLabel: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#374151',
+        marginBottom: 8,
+    },
+    filterButtons: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
+    },
+    filterButton: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#d1d5db',
+        backgroundColor: '#ffffff',
+    },
+    activeFilterButton: {
+        backgroundColor: '#3b82f6',
+        borderColor: '#3b82f6',
+    },
+    filterButtonText: {
+        fontSize: 12,
+        color: '#6b7280',
+        fontWeight: '500',
+    },
+    activeFilterButtonText: {
+        color: '#ffffff',
+    },
+    // Modal styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        backgroundColor: '#ffffff',
+        borderRadius: 12,
+        padding: 24,
+        margin: 20,
+        minWidth: width * 0.8,
+    },
+    modalTitle: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#111827',
+        marginBottom: 8,
+    },
+    modalSubtitle: {
+        fontSize: 14,
+        color: '#6b7280',
+        marginBottom: 20,
+    },
+    roleOptions: {
+        marginBottom: 24,
+    },
+    roleOption: {
+        padding: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#d1d5db',
+        marginBottom: 8,
+    },
+    selectedRoleOption: {
+        backgroundColor: '#eff6ff',
+        borderColor: '#3b82f6',
+    },
+    roleOptionText: {
+        fontSize: 16,
+        color: '#374151',
+        fontWeight: '500',
+    },
+    selectedRoleOptionText: {
+        color: '#3b82f6',
+    },
+    modalActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+    },
+    cancelButton: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: '#d1d5db',
+        marginRight: 8,
+        alignItems: 'center',
+    },
+    cancelButtonText: {
+        fontSize: 16,
+        color: '#6b7280',
+        fontWeight: '500',
+    },
+    confirmButton: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 8,
+        backgroundColor: '#3b82f6',
+        marginLeft: 8,
+        alignItems: 'center',
+    },
+    confirmButtonText: {
+        fontSize: 16,
+        color: '#ffffff',
+        fontWeight: '500',
     },
 });
 

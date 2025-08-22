@@ -2,8 +2,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { User } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Device from 'expo-device';
-import * as Network from 'expo-network';
+import { Platform } from 'react-native';
 import { FIREBASE_AUTH } from '../FirebaseConfig';
 import FirebaseService, { UserData } from '../services/FirebaseService';
 
@@ -18,6 +17,12 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   updateUserProfile: (data: Partial<UserData>) => Promise<void>;
   refreshUserData: () => Promise<void>;
+  hasRole: (role: string) => boolean;
+  hasPermission: (permission: string) => boolean;
+  isAdmin: () => boolean;
+  isContractor: () => boolean;
+  isDriver: () => boolean;
+  isSwachhHR: () => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,22 +48,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Get device information
   const getDeviceInfo = async () => {
     try {
-      const networkState = await Network.getNetworkStateAsync();
       return {
-        deviceId: Device.osInternalBuildId || 'unknown',
-        platform: Device.osName || 'unknown',
-        version: Device.osVersion || 'unknown',
-        model: Device.modelName || 'unknown',
-        brand: Device.brand || 'unknown',
-        networkType: networkState.type,
-        isConnected: networkState.isConnected
+        deviceId: 'mobile-device',
+        platform: Platform.OS,
+        version: Platform.Version.toString(),
+        model: 'unknown',
+        brand: 'unknown',
+        networkType: 'unknown',
+        isConnected: true
       };
     } catch (error) {
       console.error('Error getting device info:', error);
       return {
-        deviceId: 'unknown',
-        platform: 'unknown',
-        version: 'unknown',
+        deviceId: 'mobile-device',
+        platform: Platform.OS,
+        version: Platform.Version.toString(),
         model: 'unknown',
         brand: 'unknown',
         networkType: 'unknown',
@@ -121,7 +125,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(true);
       const deviceInfo = await getDeviceInfo();
       const user = await FirebaseService.signIn(email, password, deviceInfo);
-      
+
       // Get user data from Firestore
       const userData = await FirebaseService.getUserData(user.uid);
       if (userData) {
@@ -155,7 +159,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setLoading(true);
       const deviceInfo = await getDeviceInfo();
       const ipAddress = await getIPAddress();
-      
+
       const { user, userData } = await FirebaseService.signUp(email, password, {
         ...userDataInput,
         deviceInfo,
@@ -287,6 +291,63 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     loadInitialData();
   }, []);
 
+  // Role checking functions
+  const hasRole = (role: string): boolean => {
+    return userData?.role === role;
+  };
+
+  const hasPermission = (permission: string): boolean => {
+    if (!userData?.role) return false;
+
+    const permissions = getRolePermissions(userData.role);
+    return permissions[permission] === true;
+  };
+
+  const isAdmin = (): boolean => hasRole('admin');
+  const isContractor = (): boolean => hasRole('transport_contractor');
+  const isDriver = (): boolean => hasRole('driver');
+  const isSwachhHR = (): boolean => hasRole('swachh_hr');
+
+  // Get role permissions
+  const getRolePermissions = (role: string): any => {
+    switch (role) {
+      case 'admin':
+        return {
+          canManageUsers: true,
+          canViewAllReports: true,
+          canAssignTasks: true,
+          canGenerateReports: true,
+          canManageSystem: true,
+          canApproveRequests: true,
+          canManageFeederPoints: true,
+          canManageVehicles: true,
+          canManageAssignments: true
+        };
+      case 'transport_contractor':
+        return {
+          canManageDrivers: true,
+          canViewDriverReports: true,
+          canAssignRoutes: true,
+          canManageVehicles: true,
+          canApproveDrivers: true
+        };
+      case 'swachh_hr':
+        return {
+          canManageWorkers: true,
+          canViewReports: true,
+          canAssignTasks: true,
+          canGenerateReports: true
+        };
+      case 'driver':
+      default:
+        return {
+          canSubmitReports: true,
+          canViewAssignedRoutes: true,
+          canUpdateStatus: true
+        };
+    }
+  };
+
   const value: AuthContextType = {
     user,
     userData,
@@ -297,7 +358,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     signOut,
     resetPassword,
     updateUserProfile,
-    refreshUserData
+    refreshUserData,
+    hasRole,
+    hasPermission,
+    isAdmin,
+    isContractor,
+    isDriver,
+    isSwachhHR
   };
 
   return (

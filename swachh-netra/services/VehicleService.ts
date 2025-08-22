@@ -65,18 +65,69 @@ export class VehicleService {
   static async getAllVehicles(): Promise<Vehicle[]> {
     try {
       const vehiclesRef = collection(FIRESTORE_DB, "vehicles")
-      const q = query(vehiclesRef, where("isActive", "==", true), orderBy("createdAt", "desc"))
-      const querySnapshot = await getDocs(q)
-      
+
+      // Try compound query first, fallback to simple query if it fails
+      let querySnapshot
+      try {
+        const q = query(vehiclesRef, where("isActive", "==", true), orderBy("createdAt", "desc"))
+        querySnapshot = await getDocs(q)
+      } catch (indexError) {
+        console.warn("Compound query failed, using simple query:", indexError)
+        // Fallback to simple query without orderBy
+        const q = query(vehiclesRef, where("isActive", "==", true))
+        querySnapshot = await getDocs(q)
+      }
+
       const vehicles: Vehicle[] = []
       querySnapshot.forEach((doc) => {
-        vehicles.push({ id: doc.id, ...doc.data() } as Vehicle)
+        const data = doc.data()
+        vehicles.push({
+          id: doc.id,
+          ...data,
+          // Ensure required fields have defaults
+          createdAt: data.createdAt || new Date(),
+          registrationDate: data.registrationDate || new Date(),
+          isActive: data.isActive !== undefined ? data.isActive : true,
+          status: data.status || "active"
+        } as Vehicle)
       })
-      
+
+      // Sort manually if orderBy failed
+      vehicles.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt)
+        const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt)
+        return dateB.getTime() - dateA.getTime()
+      })
+
       return vehicles
     } catch (error) {
       console.error("Error fetching vehicles:", error)
-      throw new Error("Failed to fetch vehicles")
+
+      // If even the simple query fails, try to get all documents
+      try {
+        console.log("Attempting to fetch all vehicles without filters...")
+        const vehiclesRef = collection(FIRESTORE_DB, "vehicles")
+        const querySnapshot = await getDocs(vehiclesRef)
+
+        const vehicles: Vehicle[] = []
+        querySnapshot.forEach((doc) => {
+          const data = doc.data()
+          vehicles.push({
+            id: doc.id,
+            ...data,
+            createdAt: data.createdAt || new Date(),
+            registrationDate: data.registrationDate || new Date(),
+            isActive: data.isActive !== undefined ? data.isActive : true,
+            status: data.status || "active"
+          } as Vehicle)
+        })
+
+        // Filter active vehicles manually
+        return vehicles.filter(v => v.isActive !== false)
+      } catch (fallbackError) {
+        console.error("Fallback query also failed:", fallbackError)
+        throw new Error(`Failed to fetch vehicles: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
     }
   }
 
@@ -85,12 +136,12 @@ export class VehicleService {
       const vehiclesRef = collection(FIRESTORE_DB, "vehicles")
       const q = query(vehiclesRef, where("__name__", "==", id))
       const querySnapshot = await getDocs(q)
-      
+
       if (!querySnapshot.empty) {
         const doc = querySnapshot.docs[0]
         return { id: doc.id, ...doc.data() } as Vehicle
       }
-      
+
       return null
     } catch (error) {
       console.error("Error fetching vehicle:", error)
@@ -144,12 +195,12 @@ export class VehicleService {
       const assignmentsRef = collection(FIRESTORE_DB, "vehicleAssignments")
       const q = query(assignmentsRef, orderBy("assignedAt", "desc"))
       const querySnapshot = await getDocs(q)
-      
+
       const assignments: VehicleAssignment[] = []
       querySnapshot.forEach((doc) => {
         assignments.push({ id: doc.id, ...doc.data() } as VehicleAssignment)
       })
-      
+
       return assignments
     } catch (error) {
       console.error("Error fetching vehicle assignments:", error)
@@ -162,12 +213,12 @@ export class VehicleService {
       const assignmentsRef = collection(FIRESTORE_DB, "vehicleAssignments")
       const q = query(assignmentsRef, where("status", "==", "active"), orderBy("assignedAt", "desc"))
       const querySnapshot = await getDocs(q)
-      
+
       const assignments: VehicleAssignment[] = []
       querySnapshot.forEach((doc) => {
         assignments.push({ id: doc.id, ...doc.data() } as VehicleAssignment)
       })
-      
+
       return assignments
     } catch (error) {
       console.error("Error fetching active vehicle assignments:", error)
@@ -179,19 +230,19 @@ export class VehicleService {
     try {
       const assignmentsRef = collection(FIRESTORE_DB, "vehicleAssignments")
       const q = query(
-        assignmentsRef, 
+        assignmentsRef,
         where("assignedTo", "==", contractorId),
         where("assignmentType", "==", "admin_to_contractor"),
         where("status", "==", "active"),
         orderBy("assignedAt", "desc")
       )
       const querySnapshot = await getDocs(q)
-      
+
       const assignments: VehicleAssignment[] = []
       querySnapshot.forEach((doc) => {
         assignments.push({ id: doc.id, ...doc.data() } as VehicleAssignment)
       })
-      
+
       return assignments
     } catch (error) {
       console.error("Error fetching contractor vehicle assignments:", error)
@@ -203,19 +254,19 @@ export class VehicleService {
     try {
       const assignmentsRef = collection(FIRESTORE_DB, "vehicleAssignments")
       const q = query(
-        assignmentsRef, 
+        assignmentsRef,
         where("assignedTo", "==", driverId),
         where("assignmentType", "==", "contractor_to_driver"),
         where("status", "==", "active"),
         orderBy("assignedAt", "desc")
       )
       const querySnapshot = await getDocs(q)
-      
+
       const assignments: VehicleAssignment[] = []
       querySnapshot.forEach((doc) => {
         assignments.push({ id: doc.id, ...doc.data() } as VehicleAssignment)
       })
-      
+
       return assignments
     } catch (error) {
       console.error("Error fetching driver vehicle assignments:", error)
@@ -252,7 +303,7 @@ export class VehicleService {
         this.getAllVehicles(),
         this.getActiveVehicleAssignments()
       ])
-      
+
       const assignedVehicleIds = new Set(assignments.map(a => a.vehicleId))
       return vehicles.filter(vehicle => !assignedVehicleIds.has(vehicle.id!))
     } catch (error) {
@@ -267,9 +318,9 @@ export class VehicleService {
         this.getActiveVehicleAssignments(),
         this.getAllVehicles()
       ])
-      
+
       const vehicleMap = new Map(vehicles.map(vehicle => [vehicle.id!, vehicle]))
-      
+
       return assignments.map(assignment => ({
         ...vehicleMap.get(assignment.vehicleId)!,
         isAssigned: true,
@@ -285,18 +336,18 @@ export class VehicleService {
     try {
       const vehiclesRef = collection(FIRESTORE_DB, "vehicles")
       const q = query(
-        vehiclesRef, 
+        vehiclesRef,
         where("status", "==", status),
         where("isActive", "==", true),
         orderBy("createdAt", "desc")
       )
       const querySnapshot = await getDocs(q)
-      
+
       const vehicles: Vehicle[] = []
       querySnapshot.forEach((doc) => {
         vehicles.push({ id: doc.id, ...doc.data() } as Vehicle)
       })
-      
+
       return vehicles
     } catch (error) {
       console.error("Error fetching vehicles by status:", error)
@@ -317,11 +368,11 @@ export class VehicleService {
         this.getAllVehicles(),
         this.getActiveVehicleAssignments()
       ])
-      
+
       const activeVehicles = vehicles.filter(v => v.status === "active")
       const maintenanceVehicles = vehicles.filter(v => v.status === "maintenance")
       const totalCapacity = vehicles.reduce((sum, vehicle) => sum + vehicle.capacity, 0)
-      
+
       return {
         totalVehicles: vehicles.length,
         activeVehicles: activeVehicles.length,

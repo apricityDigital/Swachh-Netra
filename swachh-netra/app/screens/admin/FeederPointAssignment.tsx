@@ -16,6 +16,8 @@ import { collection, getDocs, query, where, addDoc } from "firebase/firestore"
 import { FIRESTORE_DB } from "../../../FirebaseConfig"
 import AdminSidebar from "../../components/AdminSidebar"
 import { FeederPointService, FeederPoint, FeederPointAssignment as AssignmentData } from "../../../services/FeederPointService"
+import ProtectedRoute from "../../components/ProtectedRoute"
+import { useRequireAdmin } from "../../hooks/useRequireAuth"
 
 interface FeederPointWithAssignment extends FeederPoint {
   isAssigned?: boolean
@@ -32,6 +34,7 @@ interface Contractor {
 }
 
 const FeederPointAssignmentScreen = ({ navigation }: any) => {
+  const { hasAccess, userData } = useRequireAdmin(navigation)
   const [sidebarVisible, setSidebarVisible] = useState(false)
   const [loading, setLoading] = useState(false)
   const [feederPoints, setFeederPoints] = useState<FeederPointWithAssignment[]>([])
@@ -202,9 +205,9 @@ const FeederPointAssignmentScreen = ({ navigation }: any) => {
 
   const filteredFeederPoints = () => {
     const points = selectedTab === "assigned" ? getAssignedFeederPoints() : getUnassignedFeederPoints()
-    
+
     if (!searchQuery) return points
-    
+
     return points.filter(point =>
       point.feederPointName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       point.areaName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -218,7 +221,7 @@ const FeederPointAssignmentScreen = ({ navigation }: any) => {
 
     try {
       setLoading(true)
-      
+
       const assignmentData = {
         feederPointId: selectedFeederPoint.id,
         contractorId: contractorId,
@@ -227,13 +230,15 @@ const FeederPointAssignmentScreen = ({ navigation }: any) => {
       }
 
       await FeederPointService.createAssignment(assignmentData)
-      
+
       Alert.alert("Success", "Feeder point assigned successfully", [
-        { text: "OK", onPress: () => {
-          setShowContractorSelection(false)
-          setSelectedFeederPoint(null)
-          fetchAssignments()
-        }}
+        {
+          text: "OK", onPress: () => {
+            setShowContractorSelection(false)
+            setSelectedFeederPoint(null)
+            fetchAssignments()
+          }
+        }
       ])
     } catch (error) {
       console.error("Error assigning feeder point:", error)
@@ -246,11 +251,11 @@ const FeederPointAssignmentScreen = ({ navigation }: any) => {
   const unassignFeederPoint = async (feederPointId: string) => {
     try {
       setLoading(true)
-      
+
       const assignment = assignments.find(a => a.feederPointId === feederPointId)
       if (assignment && assignment.id) {
         await FeederPointService.deleteAssignment(assignment.id)
-        
+
         Alert.alert("Success", "Feeder point unassigned successfully")
         fetchAssignments()
       }
@@ -298,11 +303,11 @@ const FeederPointAssignmentScreen = ({ navigation }: any) => {
             )}
           </View>
         </View>
-        
+
         <Text style={styles.pointArea}>{item.areaName}</Text>
         <Text style={styles.pointLandmark}>{item.nearestLandmark}</Text>
         <Text style={styles.pointKothi}>Kothi: {item.kothiName}</Text>
-        
+
         <View style={styles.pointDetails}>
           <Text style={styles.pointHouseholds}>{item.approximateHouseholds} households</Text>
           <Text style={styles.pointVehicles}>{item.vehicleTypes}</Text>
@@ -342,175 +347,177 @@ const FeederPointAssignmentScreen = ({ navigation }: any) => {
   )
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity 
-            onPress={() => setSidebarVisible(true)} 
-            style={styles.menuButton}
-          >
-            <MaterialIcons name="menu" size={24} color="#374151" />
-          </TouchableOpacity>
-          
-          <View style={styles.headerLeft}>
-            <TouchableOpacity 
-              onPress={() => navigation.goBack()} 
-              style={styles.backButton}
+    <ProtectedRoute requiredRole="admin" navigation={navigation}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <TouchableOpacity
+              onPress={() => setSidebarVisible(true)}
+              style={styles.menuButton}
             >
-              <MaterialIcons name="arrow-back" size={24} color="#374151" />
+              <MaterialIcons name="menu" size={24} color="#374151" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Feeder Point Assignment</Text>
-          </View>
-        </View>
-      </View>
 
-      {/* Search and Tabs */}
-      <View style={styles.searchSection}>
-        <Searchbar
-          placeholder="Search feeder points..."
-          onChangeText={setSearchQuery}
-          value={searchQuery}
-          style={styles.searchBar}
-        />
-        
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, selectedTab === "unassigned" && styles.activeTab]}
-            onPress={() => setSelectedTab("unassigned")}
-          >
-            <Text style={[styles.tabText, selectedTab === "unassigned" && styles.activeTabText]}>
-              Unassigned ({getUnassignedFeederPoints().length})
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.tab, selectedTab === "assigned" && styles.activeTab]}
-            onPress={() => setSelectedTab("assigned")}
-          >
-            <Text style={[styles.tabText, selectedTab === "assigned" && styles.activeTabText]}>
-              Assigned ({getAssignedFeederPoints().length})
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Feeder Points List */}
-      <FlatList
-        data={filteredFeederPoints()}
-        renderItem={renderFeederPointCard}
-        keyExtractor={(item) => item.id || ""}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        refreshing={loading}
-        onRefresh={fetchData}
-        ListEmptyComponent={
-          <Card style={styles.emptyCard}>
-            <View style={styles.emptyContent}>
-              <MaterialIcons 
-                name={selectedTab === "assigned" ? "assignment-turned-in" : "assignment"} 
-                size={48} 
-                color="#9ca3af" 
-              />
-              <Text style={styles.emptyText}>
-                {selectedTab === "assigned" ? "No assigned feeder points" : "No unassigned feeder points"}
-              </Text>
-              <Text style={styles.emptySubtext}>
-                {selectedTab === "assigned" 
-                  ? "All feeder points are currently unassigned" 
-                  : "All feeder points have been assigned to contractors"
-                }
-              </Text>
-            </View>
-          </Card>
-        }
-      />
-
-      {/* Contractor Selection Modal */}
-      {showContractorSelection && selectedFeederPoint && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Contractor</Text>
+            <View style={styles.headerLeft}>
               <TouchableOpacity
-                onPress={() => setShowContractorSelection(false)}
-                style={styles.modalCloseButton}
+                onPress={() => navigation.goBack()}
+                style={styles.backButton}
               >
-                <MaterialIcons name="close" size={24} color="#6b7280" />
+                <MaterialIcons name="arrow-back" size={24} color="#374151" />
               </TouchableOpacity>
+              <Text style={styles.headerTitle}>Feeder Point Assignment</Text>
             </View>
-
-            <Text style={styles.modalSubtitle}>
-              Assign "{selectedFeederPoint.feederPointName}" to a contractor
-            </Text>
-
-            {/* Debug Info */}
-            <View style={{ padding: 10, backgroundColor: "#f0f0f0", margin: 10, borderRadius: 5 }}>
-              <Text style={{ fontSize: 12, color: "#666" }}>
-                Debug: Found {contractors.length} contractors
-              </Text>
-              <View style={{ flexDirection: "row", gap: 10, marginTop: 5 }}>
-                <Button
-                  mode="outlined"
-                  onPress={fetchContractors}
-                  style={{ flex: 1 }}
-                >
-                  Refresh
-                </Button>
-                <Button
-                  mode="outlined"
-                  onPress={createTestContractor}
-                  style={{ flex: 1 }}
-                >
-                  Add Test Contractor
-                </Button>
-              </View>
-            </View>
-
-            <ScrollView style={styles.contractorList} showsVerticalScrollIndicator={false}>
-              {contractors.map((contractor) => (
-                <TouchableOpacity
-                  key={contractor.id}
-                  style={styles.contractorItem}
-                  onPress={() => assignFeederPoint(contractor.id)}
-                >
-                  <View style={styles.contractorInfo}>
-                    <View style={styles.contractorAvatar}>
-                      <MaterialIcons name="business" size={24} color="#3b82f6" />
-                    </View>
-                    <View style={styles.contractorDetails}>
-                      <Text style={styles.contractorName}>{contractor.fullName}</Text>
-                      <Text style={styles.contractorEmail}>{contractor.email}</Text>
-                    </View>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
-                </TouchableOpacity>
-              ))}
-
-              {contractors.length === 0 && (
-                <View style={styles.noContractors}>
-                  <MaterialIcons name="business" size={48} color="#9ca3af" />
-                  <Text style={styles.noContractorsText}>No active contractors found</Text>
-                  <Text style={styles.noContractorsSubtext}>
-                    Please ensure contractors are registered and active
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
           </View>
         </View>
-      )}
 
-      {/* Admin Sidebar */}
-      <AdminSidebar
-        navigation={navigation}
-        isVisible={sidebarVisible}
-        onClose={() => setSidebarVisible(false)}
-        currentScreen="FeederPointAssignment"
-      />
-    </SafeAreaView>
+        {/* Search and Tabs */}
+        <View style={styles.searchSection}>
+          <Searchbar
+            placeholder="Search feeder points..."
+            onChangeText={setSearchQuery}
+            value={searchQuery}
+            style={styles.searchBar}
+          />
+
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, selectedTab === "unassigned" && styles.activeTab]}
+              onPress={() => setSelectedTab("unassigned")}
+            >
+              <Text style={[styles.tabText, selectedTab === "unassigned" && styles.activeTabText]}>
+                Unassigned ({getUnassignedFeederPoints().length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tab, selectedTab === "assigned" && styles.activeTab]}
+              onPress={() => setSelectedTab("assigned")}
+            >
+              <Text style={[styles.tabText, selectedTab === "assigned" && styles.activeTabText]}>
+                Assigned ({getAssignedFeederPoints().length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Feeder Points List */}
+        <FlatList
+          data={filteredFeederPoints()}
+          renderItem={renderFeederPointCard}
+          keyExtractor={(item) => item.id || ""}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          refreshing={loading}
+          onRefresh={fetchData}
+          ListEmptyComponent={
+            <Card style={styles.emptyCard}>
+              <View style={styles.emptyContent}>
+                <MaterialIcons
+                  name={selectedTab === "assigned" ? "assignment-turned-in" : "assignment"}
+                  size={48}
+                  color="#9ca3af"
+                />
+                <Text style={styles.emptyText}>
+                  {selectedTab === "assigned" ? "No assigned feeder points" : "No unassigned feeder points"}
+                </Text>
+                <Text style={styles.emptySubtext}>
+                  {selectedTab === "assigned"
+                    ? "All feeder points are currently unassigned"
+                    : "All feeder points have been assigned to contractors"
+                  }
+                </Text>
+              </View>
+            </Card>
+          }
+        />
+
+        {/* Contractor Selection Modal */}
+        {showContractorSelection && selectedFeederPoint && (
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Contractor</Text>
+                <TouchableOpacity
+                  onPress={() => setShowContractorSelection(false)}
+                  style={styles.modalCloseButton}
+                >
+                  <MaterialIcons name="close" size={24} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalSubtitle}>
+                Assign "{selectedFeederPoint.feederPointName}" to a contractor
+              </Text>
+
+              {/* Debug Info */}
+              <View style={{ padding: 10, backgroundColor: "#f0f0f0", margin: 10, borderRadius: 5 }}>
+                <Text style={{ fontSize: 12, color: "#666" }}>
+                  Debug: Found {contractors.length} contractors
+                </Text>
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 5 }}>
+                  <Button
+                    mode="outlined"
+                    onPress={fetchContractors}
+                    style={{ flex: 1 }}
+                  >
+                    Refresh
+                  </Button>
+                  <Button
+                    mode="outlined"
+                    onPress={createTestContractor}
+                    style={{ flex: 1 }}
+                  >
+                    Add Test Contractor
+                  </Button>
+                </View>
+              </View>
+
+              <ScrollView style={styles.contractorList} showsVerticalScrollIndicator={false}>
+                {contractors.map((contractor) => (
+                  <TouchableOpacity
+                    key={contractor.id}
+                    style={styles.contractorItem}
+                    onPress={() => assignFeederPoint(contractor.id)}
+                  >
+                    <View style={styles.contractorInfo}>
+                      <View style={styles.contractorAvatar}>
+                        <MaterialIcons name="business" size={24} color="#3b82f6" />
+                      </View>
+                      <View style={styles.contractorDetails}>
+                        <Text style={styles.contractorName}>{contractor.fullName}</Text>
+                        <Text style={styles.contractorEmail}>{contractor.email}</Text>
+                      </View>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
+                  </TouchableOpacity>
+                ))}
+
+                {contractors.length === 0 && (
+                  <View style={styles.noContractors}>
+                    <MaterialIcons name="business" size={48} color="#9ca3af" />
+                    <Text style={styles.noContractorsText}>No active contractors found</Text>
+                    <Text style={styles.noContractorsSubtext}>
+                      Please ensure contractors are registered and active
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        )}
+
+        {/* Admin Sidebar */}
+        <AdminSidebar
+          navigation={navigation}
+          isVisible={sidebarVisible}
+          onClose={() => setSidebarVisible(false)}
+          currentScreen="FeederPointAssignment"
+        />
+      </SafeAreaView>
+    </ProtectedRoute>
   )
 }
 

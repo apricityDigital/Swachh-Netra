@@ -17,13 +17,16 @@ import * as Location from "expo-location"
 import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 import AdminSidebar from "../../components/AdminSidebar"
 import { FeederPointService, FeederPoint } from "../../../services/FeederPointService"
+import ProtectedRoute from "../../components/ProtectedRoute"
+import { useRequireAdmin } from "../../hooks/useRequireAuth"
 
 const FeederPointManagement = ({ navigation }: any) => {
+  const { hasAccess, userData } = useRequireAdmin(navigation)
   const [sidebarVisible, setSidebarVisible] = useState(false)
   const [loading, setLoading] = useState(false)
   const [feederPoints, setFeederPoints] = useState<FeederPoint[]>([])
   const [showForm, setShowForm] = useState(false)
-  
+
   // Form state
   const [formData, setFormData] = useState<Partial<FeederPoint>>({
     areaName: "",
@@ -146,22 +149,22 @@ const FeederPointManagement = ({ navigation }: any) => {
 
   const validateForm = (): boolean => {
     const required = [
-      "areaName", "wardNumber", "kothiName", "feederPointName", 
+      "areaName", "wardNumber", "kothiName", "feederPointName",
       "nearestLandmark", "approximateHouseholds", "vehicleTypes"
     ]
-    
+
     for (const field of required) {
       if (!formData[field as keyof FeederPoint]) {
         Alert.alert("Validation Error", `${field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} is required`)
         return false
       }
     }
-    
+
     if (!formData.coordinates?.latitude || !formData.coordinates?.longitude) {
       Alert.alert("Validation Error", "Location coordinates are required")
       return false
     }
-    
+
     return true
   }
 
@@ -183,25 +186,27 @@ const FeederPointManagement = ({ navigation }: any) => {
       console.log("Feeder point created with ID:", feederPointId)
 
       Alert.alert("Success", "Feeder point created successfully", [
-        { text: "OK", onPress: () => {
-          setShowForm(false)
-          setFormData({
-            areaName: "",
-            areaDescription: "",
-            wardNumber: "",
-            populationDensity: "",
-            accessibility: "",
-            additionalDetails: "",
-            kothiName: "",
-            feederPointName: "",
-            nearestLandmark: "",
-            approximateHouseholds: "",
-            vehicleTypes: "",
-            locationPhoto: "",
-            coordinates: { latitude: 0, longitude: 0 },
-          })
-          fetchFeederPoints()
-        }}
+        {
+          text: "OK", onPress: () => {
+            setShowForm(false)
+            setFormData({
+              areaName: "",
+              areaDescription: "",
+              wardNumber: "",
+              populationDensity: "",
+              accessibility: "",
+              additionalDetails: "",
+              kothiName: "",
+              feederPointName: "",
+              nearestLandmark: "",
+              approximateHouseholds: "",
+              vehicleTypes: "",
+              locationPhoto: "",
+              coordinates: { latitude: 0, longitude: 0 },
+            })
+            fetchFeederPoints()
+          }
+        }
       ])
     } catch (error) {
       console.error("Error saving feeder point:", error)
@@ -216,284 +221,286 @@ const FeederPointManagement = ({ navigation }: any) => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity 
-            onPress={() => setSidebarVisible(true)} 
-            style={styles.menuButton}
-          >
-            <MaterialIcons name="menu" size={24} color="#374151" />
-          </TouchableOpacity>
-          
-          <View style={styles.headerLeft}>
-            <TouchableOpacity 
-              onPress={() => navigation.goBack()} 
-              style={styles.backButton}
+    <ProtectedRoute requiredRole="admin" navigation={navigation}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <TouchableOpacity
+              onPress={() => setSidebarVisible(true)}
+              style={styles.menuButton}
             >
-              <MaterialIcons name="arrow-back" size={24} color="#374151" />
+              <MaterialIcons name="menu" size={24} color="#374151" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Feeder Point Management</Text>
+
+            <View style={styles.headerLeft}>
+              <TouchableOpacity
+                onPress={() => navigation.goBack()}
+                style={styles.backButton}
+              >
+                <MaterialIcons name="arrow-back" size={24} color="#374151" />
+              </TouchableOpacity>
+              <Text style={styles.headerTitle}>Feeder Point Manage</Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => setShowForm(!showForm)}
+              style={styles.addButton}
+            >
+              <MaterialIcons name={showForm ? "close" : "add"} size={24} color="#3b82f6" />
+            </TouchableOpacity>
           </View>
-          
-          <TouchableOpacity 
-            onPress={() => setShowForm(!showForm)} 
-            style={styles.addButton}
-          >
-            <MaterialIcons name={showForm ? "close" : "add"} size={24} color="#3b82f6" />
-          </TouchableOpacity>
         </View>
-      </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {showForm && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Create New Feeder Point</Text>
-            
-            {/* Basic Information */}
-            <Card style={styles.formCard}>
-              <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>Basic Information</Text>
-                
-                <TextInput
-                  label="Area Name *"
-                  value={formData.areaName}
-                  onChangeText={(text) => updateFormField("areaName", text)}
-                  style={styles.input}
-                  mode="outlined"
-                />
-                
-                <TextInput
-                  label="Area Description"
-                  value={formData.areaDescription}
-                  onChangeText={(text) => updateFormField("areaDescription", text)}
-                  style={styles.input}
-                  mode="outlined"
-                  multiline
-                  numberOfLines={3}
-                />
-                
-                <TextInput
-                  label="Ward Number *"
-                  value={formData.wardNumber}
-                  onChangeText={(text) => updateFormField("wardNumber", text)}
-                  style={styles.input}
-                  mode="outlined"
-                  keyboardType="numeric"
-                />
-                
-                <TextInput
-                  label="Population Density"
-                  value={formData.populationDensity}
-                  onChangeText={(text) => updateFormField("populationDensity", text)}
-                  style={styles.input}
-                  mode="outlined"
-                  placeholder="e.g., High, Medium, Low"
-                />
-                
-                <TextInput
-                  label="Accessibility"
-                  value={formData.accessibility}
-                  onChangeText={(text) => updateFormField("accessibility", text)}
-                  style={styles.input}
-                  mode="outlined"
-                  placeholder="e.g., Easy, Moderate, Difficult"
-                />
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {showForm && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Create New Feeder Point</Text>
 
-                <TextInput
-                  label="Additional Details"
-                  value={formData.additionalDetails}
-                  onChangeText={(text) => updateFormField("additionalDetails", text)}
-                  style={styles.input}
-                  mode="outlined"
-                  multiline
-                  numberOfLines={2}
-                  placeholder="Any additional information"
-                />
-              </View>
-            </Card>
+              {/* Basic Information */}
+              <Card style={styles.formCard}>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>Basic Information</Text>
 
-            {/* Detailed Information */}
-            <Card style={styles.formCard}>
-              <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>Detailed Information</Text>
+                  <TextInput
+                    label="Area Name *"
+                    value={formData.areaName}
+                    onChangeText={(text) => updateFormField("areaName", text)}
+                    style={styles.input}
+                    mode="outlined"
+                  />
 
-                <TextInput
-                  label="Kothi Name *"
-                  value={formData.kothiName}
-                  onChangeText={(text) => updateFormField("kothiName", text)}
-                  style={styles.input}
-                  mode="outlined"
-                />
+                  <TextInput
+                    label="Area Description"
+                    value={formData.areaDescription}
+                    onChangeText={(text) => updateFormField("areaDescription", text)}
+                    style={styles.input}
+                    mode="outlined"
+                    multiline
+                    numberOfLines={3}
+                  />
 
-                <TextInput
-                  label="Feeder Point Name *"
-                  value={formData.feederPointName}
-                  onChangeText={(text) => updateFormField("feederPointName", text)}
-                  style={styles.input}
-                  mode="outlined"
-                />
+                  <TextInput
+                    label="Ward Number *"
+                    value={formData.wardNumber}
+                    onChangeText={(text) => updateFormField("wardNumber", text)}
+                    style={styles.input}
+                    mode="outlined"
+                    keyboardType="numeric"
+                  />
 
-                <TextInput
-                  label="Nearest Landmark/Address *"
-                  value={formData.nearestLandmark}
-                  onChangeText={(text) => updateFormField("nearestLandmark", text)}
-                  style={styles.input}
-                  mode="outlined"
-                  multiline
-                  numberOfLines={2}
-                />
+                  <TextInput
+                    label="Population Density"
+                    value={formData.populationDensity}
+                    onChangeText={(text) => updateFormField("populationDensity", text)}
+                    style={styles.input}
+                    mode="outlined"
+                    placeholder="e.g., High, Medium, Low"
+                  />
 
-                <TextInput
-                  label="Approximate Number of Households *"
-                  value={formData.approximateHouseholds}
-                  onChangeText={(text) => updateFormField("approximateHouseholds", text)}
-                  style={styles.input}
-                  mode="outlined"
-                  keyboardType="numeric"
-                />
+                  <TextInput
+                    label="Accessibility"
+                    value={formData.accessibility}
+                    onChangeText={(text) => updateFormField("accessibility", text)}
+                    style={styles.input}
+                    mode="outlined"
+                    placeholder="e.g., Easy, Moderate, Difficult"
+                  />
 
-                <TextInput
-                  label="Types of Vehicles Used for Collections *"
-                  value={formData.vehicleTypes}
-                  onChangeText={(text) => updateFormField("vehicleTypes", text)}
-                  style={styles.input}
-                  mode="outlined"
-                  placeholder="e.g., Truck, Auto, Cycle"
-                />
-              </View>
-            </Card>
+                  <TextInput
+                    label="Additional Details"
+                    value={formData.additionalDetails}
+                    onChangeText={(text) => updateFormField("additionalDetails", text)}
+                    style={styles.input}
+                    mode="outlined"
+                    multiline
+                    numberOfLines={2}
+                    placeholder="Any additional information"
+                  />
+                </View>
+              </Card>
 
-            {/* Location & Photo */}
-            <Card style={styles.formCard}>
-              <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>Location & Photo</Text>
+              {/* Detailed Information */}
+              <Card style={styles.formCard}>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>Detailed Information</Text>
 
-                <View style={styles.locationSection}>
-                  <Text style={styles.locationLabel}>Location Coordinates</Text>
-                  {formData.coordinates?.latitude && formData.coordinates?.longitude ? (
-                    <View style={styles.coordinatesDisplay}>
-                      <Text style={styles.coordinateText}>
-                        Lat: {formData.coordinates.latitude.toFixed(6)}
-                      </Text>
-                      <Text style={styles.coordinateText}>
-                        Lng: {formData.coordinates.longitude.toFixed(6)}
-                      </Text>
+                  <TextInput
+                    label="Kothi Name *"
+                    value={formData.kothiName}
+                    onChangeText={(text) => updateFormField("kothiName", text)}
+                    style={styles.input}
+                    mode="outlined"
+                  />
+
+                  <TextInput
+                    label="Feeder Point Name *"
+                    value={formData.feederPointName}
+                    onChangeText={(text) => updateFormField("feederPointName", text)}
+                    style={styles.input}
+                    mode="outlined"
+                  />
+
+                  <TextInput
+                    label="Nearest Landmark/Address *"
+                    value={formData.nearestLandmark}
+                    onChangeText={(text) => updateFormField("nearestLandmark", text)}
+                    style={styles.input}
+                    mode="outlined"
+                    multiline
+                    numberOfLines={2}
+                  />
+
+                  <TextInput
+                    label="Approximate Number of Households *"
+                    value={formData.approximateHouseholds}
+                    onChangeText={(text) => updateFormField("approximateHouseholds", text)}
+                    style={styles.input}
+                    mode="outlined"
+                    keyboardType="numeric"
+                  />
+
+                  <TextInput
+                    label="Types of Vehicles Used for Collections *"
+                    value={formData.vehicleTypes}
+                    onChangeText={(text) => updateFormField("vehicleTypes", text)}
+                    style={styles.input}
+                    mode="outlined"
+                    placeholder="e.g., Truck, Auto, Cycle"
+                  />
+                </View>
+              </Card>
+
+              {/* Location & Photo */}
+              <Card style={styles.formCard}>
+                <View style={styles.cardContent}>
+                  <Text style={styles.cardTitle}>Location & Photo</Text>
+
+                  <View style={styles.locationSection}>
+                    <Text style={styles.locationLabel}>Location Coordinates</Text>
+                    {formData.coordinates?.latitude && formData.coordinates?.longitude ? (
+                      <View style={styles.coordinatesDisplay}>
+                        <Text style={styles.coordinateText}>
+                          Lat: {formData.coordinates.latitude.toFixed(6)}
+                        </Text>
+                        <Text style={styles.coordinateText}>
+                          Lng: {formData.coordinates.longitude.toFixed(6)}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.noLocationText}>No location captured</Text>
+                    )}
+
+                    <Button
+                      mode="outlined"
+                      onPress={getCurrentLocation}
+                      loading={loading}
+                      style={styles.locationButton}
+                      icon="my-location"
+                    >
+                      {formData.coordinates?.latitude ? "Update Location" : "Get Current Location"}
+                    </Button>
+                  </View>
+
+                  <View style={styles.photoSection}>
+                    <Text style={styles.photoLabel}>Location Photo</Text>
+                    {formData.locationPhoto ? (
+                      <View style={styles.photoContainer}>
+                        <Image source={{ uri: formData.locationPhoto }} style={styles.photoPreview} />
+                        <TouchableOpacity
+                          style={styles.removePhotoButton}
+                          onPress={() => updateFormField("locationPhoto", "")}
+                        >
+                          <MaterialIcons name="close" size={20} color="#ef4444" />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.photoPlaceholder}>
+                        <MaterialIcons name="photo-camera" size={48} color="#9ca3af" />
+                        <Text style={styles.photoPlaceholderText}>No photo selected</Text>
+                      </View>
+                    )}
+
+                    <View style={styles.photoButtons}>
+                      <Button
+                        mode="outlined"
+                        onPress={takePhoto}
+                        style={styles.photoButton}
+                        icon="camera"
+                      >
+                        Take Photo
+                      </Button>
+                      <Button
+                        mode="outlined"
+                        onPress={pickImage}
+                        style={styles.photoButton}
+                        icon="image"
+                      >
+                        Choose Image
+                      </Button>
                     </View>
-                  ) : (
-                    <Text style={styles.noLocationText}>No location captured</Text>
-                  )}
+                  </View>
 
                   <Button
-                    mode="outlined"
-                    onPress={getCurrentLocation}
+                    mode="contained"
+                    onPress={saveFeederPoint}
                     loading={loading}
-                    style={styles.locationButton}
-                    icon="my-location"
+                    style={styles.saveButton}
+                    icon="save"
                   >
-                    {formData.coordinates?.latitude ? "Update Location" : "Get Current Location"}
+                    Create Feeder Point
                   </Button>
                 </View>
-
-                <View style={styles.photoSection}>
-                  <Text style={styles.photoLabel}>Location Photo</Text>
-                  {formData.locationPhoto ? (
-                    <View style={styles.photoContainer}>
-                      <Image source={{ uri: formData.locationPhoto }} style={styles.photoPreview} />
-                      <TouchableOpacity
-                        style={styles.removePhotoButton}
-                        onPress={() => updateFormField("locationPhoto", "")}
-                      >
-                        <MaterialIcons name="close" size={20} color="#ef4444" />
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <View style={styles.photoPlaceholder}>
-                      <MaterialIcons name="photo-camera" size={48} color="#9ca3af" />
-                      <Text style={styles.photoPlaceholderText}>No photo selected</Text>
-                    </View>
-                  )}
-
-                  <View style={styles.photoButtons}>
-                    <Button
-                      mode="outlined"
-                      onPress={takePhoto}
-                      style={styles.photoButton}
-                      icon="camera"
-                    >
-                      Take Photo
-                    </Button>
-                    <Button
-                      mode="outlined"
-                      onPress={pickImage}
-                      style={styles.photoButton}
-                      icon="image"
-                    >
-                      Choose Image
-                    </Button>
-                  </View>
-                </View>
-
-                <Button
-                  mode="contained"
-                  onPress={saveFeederPoint}
-                  loading={loading}
-                  style={styles.saveButton}
-                  icon="save"
-                >
-                  Create Feeder Point
-                </Button>
-              </View>
-            </Card>
-          </View>
-        )}
-
-        {/* Existing Feeder Points List */}
-        {!showForm && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Existing Feeder Points ({feederPoints.length})</Text>
-            
-            {feederPoints.map((point) => (
-              <Card key={point.id} style={styles.pointCard}>
-                <View style={styles.pointContent}>
-                  <View style={styles.pointHeader}>
-                    <Text style={styles.pointName}>{point.feederPointName}</Text>
-                    <Text style={styles.pointWard}>Ward {point.wardNumber}</Text>
-                  </View>
-                  <Text style={styles.pointArea}>{point.areaName}</Text>
-                  <Text style={styles.pointLandmark}>{point.nearestLandmark}</Text>
-                  <View style={styles.pointFooter}>
-                    <Text style={styles.pointHouseholds}>{point.approximateHouseholds} households</Text>
-                    <Text style={styles.pointVehicles}>{point.vehicleTypes}</Text>
-                  </View>
-                </View>
               </Card>
-            ))}
-            
-            {feederPoints.length === 0 && (
-              <Card style={styles.emptyCard}>
-                <View style={styles.emptyContent}>
-                  <MaterialIcons name="location-off" size={48} color="#9ca3af" />
-                  <Text style={styles.emptyText}>No feeder points created yet</Text>
-                  <Text style={styles.emptySubtext}>Tap the + button to create your first feeder point</Text>
-                </View>
-              </Card>
-            )}
-          </View>
-        )}
-      </ScrollView>
+            </View>
+          )}
 
-      {/* Admin Sidebar */}
-      <AdminSidebar
-        navigation={navigation}
-        isVisible={sidebarVisible}
-        onClose={() => setSidebarVisible(false)}
-        currentScreen="FeederPointManagement"
-      />
-    </SafeAreaView>
+          {/* Existing Feeder Points List */}
+          {!showForm && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Existing Feeder Points ({feederPoints.length})</Text>
+
+              {feederPoints.map((point) => (
+                <Card key={point.id} style={styles.pointCard}>
+                  <View style={styles.pointContent}>
+                    <View style={styles.pointHeader}>
+                      <Text style={styles.pointName}>{point.feederPointName}</Text>
+                      <Text style={styles.pointWard}>Ward {point.wardNumber}</Text>
+                    </View>
+                    <Text style={styles.pointArea}>{point.areaName}</Text>
+                    <Text style={styles.pointLandmark}>{point.nearestLandmark}</Text>
+                    <View style={styles.pointFooter}>
+                      <Text style={styles.pointHouseholds}>{point.approximateHouseholds} households</Text>
+                      <Text style={styles.pointVehicles}>{point.vehicleTypes}</Text>
+                    </View>
+                  </View>
+                </Card>
+              ))}
+
+              {feederPoints.length === 0 && (
+                <Card style={styles.emptyCard}>
+                  <View style={styles.emptyContent}>
+                    <MaterialIcons name="location-off" size={48} color="#9ca3af" />
+                    <Text style={styles.emptyText}>No feeder points created yet</Text>
+                    <Text style={styles.emptySubtext}>Tap the + button to create your first feeder point</Text>
+                  </View>
+                </Card>
+              )}
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Admin Sidebar */}
+        <AdminSidebar
+          navigation={navigation}
+          isVisible={sidebarVisible}
+          onClose={() => setSidebarVisible(false)}
+          currentScreen="FeederPointManagement"
+        />
+      </SafeAreaView>
+    </ProtectedRoute>
   )
 }
 
@@ -531,7 +538,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 17.8,
     fontWeight: "700",
     color: "#111827",
   },

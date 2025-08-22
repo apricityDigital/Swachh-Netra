@@ -16,6 +16,8 @@ import { collection, getDocs, query, where } from "firebase/firestore"
 import { FIRESTORE_DB } from "../../../FirebaseConfig"
 import AdminSidebar from "../../components/AdminSidebar"
 import { VehicleService, Vehicle, VehicleAssignment as VehicleAssignmentData } from "../../../services/VehicleService"
+import ProtectedRoute from "../../components/ProtectedRoute"
+import { useRequireAdmin } from "../../hooks/useRequireAuth"
 
 interface VehicleWithAssignment extends Vehicle {
   isAssigned?: boolean
@@ -32,6 +34,7 @@ interface Contractor {
 }
 
 const VehicleAssignmentScreen = ({ navigation }: any) => {
+  const { hasAccess, userData } = useRequireAdmin(navigation)
   const [sidebarVisible, setSidebarVisible] = useState(false)
   const [loading, setLoading] = useState(false)
   const [vehicles, setVehicles] = useState<VehicleWithAssignment[]>([])
@@ -80,36 +83,36 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
     try {
       console.log("Fetching contractors...")
       const usersRef = collection(FIRESTORE_DB, "users")
-      
+
       // First, try to get contractors with isActive: true
       let q = query(
-        usersRef, 
+        usersRef,
         where("role", "==", "contractor"),
         where("isActive", "==", true)
       )
       let querySnapshot = await getDocs(q)
-      
+
       let contractorList: Contractor[] = []
       querySnapshot.forEach((doc) => {
         contractorList.push({ id: doc.id, ...doc.data() } as Contractor)
       })
-      
+
       // If no active contractors found, try to get all contractors
       if (contractorList.length === 0) {
         console.log("No active contractors found, fetching all contractors...")
         q = query(usersRef, where("role", "==", "contractor"))
         querySnapshot = await getDocs(q)
-        
+
         querySnapshot.forEach((doc) => {
           const data = doc.data()
-          contractorList.push({ 
-            id: doc.id, 
+          contractorList.push({
+            id: doc.id,
             ...data,
             isActive: data.isActive !== false
           } as Contractor)
         })
       }
-      
+
       console.log("Found contractors:", contractorList.length)
       setContractors(contractorList)
     } catch (error) {
@@ -153,9 +156,9 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
 
   const filteredVehicles = () => {
     const vehicleList = selectedTab === "assigned" ? getAssignedVehicles() : getUnassignedVehicles()
-    
+
     if (!searchQuery) return vehicleList
-    
+
     return vehicleList.filter(vehicle =>
       vehicle.vehicleNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       vehicle.vehicleType.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -168,7 +171,7 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
 
     try {
       setLoading(true)
-      
+
       const assignmentData = {
         vehicleId: selectedVehicle.id,
         assignedTo: contractorId,
@@ -178,13 +181,15 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
       }
 
       await VehicleService.createVehicleAssignment(assignmentData)
-      
+
       Alert.alert("Success", "Vehicle assigned successfully", [
-        { text: "OK", onPress: () => {
-          setShowContractorSelection(false)
-          setSelectedVehicle(null)
-          fetchAssignments()
-        }}
+        {
+          text: "OK", onPress: () => {
+            setShowContractorSelection(false)
+            setSelectedVehicle(null)
+            fetchAssignments()
+          }
+        }
       ])
     } catch (error) {
       console.error("Error assigning vehicle:", error)
@@ -197,11 +202,11 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
   const unassignVehicle = async (vehicleId: string) => {
     try {
       setLoading(true)
-      
+
       const assignment = assignments.find(a => a.vehicleId === vehicleId)
       if (assignment && assignment.id) {
         await VehicleService.deleteVehicleAssignment(assignment.id)
-        
+
         Alert.alert("Success", "Vehicle unassigned successfully")
         fetchAssignments()
       }
@@ -251,7 +256,7 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
             <Text style={styles.vehicleType}>{item.vehicleType}</Text>
           </View>
           <View style={styles.vehicleBadges}>
-            <Chip 
+            <Chip
               style={[styles.statusChip, { backgroundColor: `${getStatusColor(item.status)}20` }]}
               textStyle={[styles.statusChipText, { color: getStatusColor(item.status) }]}
             >
@@ -264,7 +269,7 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
             )}
           </View>
         </View>
-        
+
         <View style={styles.vehicleDetails}>
           <View style={styles.detailItem}>
             <MaterialIcons name="local-shipping" size={16} color="#6b7280" />
@@ -312,152 +317,154 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
   )
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <TouchableOpacity 
-            onPress={() => setSidebarVisible(true)} 
-            style={styles.menuButton}
-          >
-            <MaterialIcons name="menu" size={24} color="#374151" />
-          </TouchableOpacity>
-          
-          <View style={styles.headerLeft}>
-            <TouchableOpacity 
-              onPress={() => navigation.goBack()} 
-              style={styles.backButton}
+    <ProtectedRoute requiredRole="admin" navigation={navigation}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
+
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <TouchableOpacity
+              onPress={() => setSidebarVisible(true)}
+              style={styles.menuButton}
             >
-              <MaterialIcons name="arrow-back" size={24} color="#374151" />
+              <MaterialIcons name="menu" size={24} color="#374151" />
             </TouchableOpacity>
-            <Text style={styles.headerTitle}>Vehicle Assignment</Text>
-          </View>
-        </View>
-      </View>
 
-      {/* Search and Tabs */}
-      <View style={styles.searchSection}>
-        <Searchbar
-          placeholder="Search vehicles..."
-          onChangeText={setSearchQuery}
-          value={searchQuery}
-          style={styles.searchBar}
-        />
-        
-        <View style={styles.tabContainer}>
-          <TouchableOpacity
-            style={[styles.tab, selectedTab === "unassigned" && styles.activeTab]}
-            onPress={() => setSelectedTab("unassigned")}
-          >
-            <Text style={[styles.tabText, selectedTab === "unassigned" && styles.activeTabText]}>
-              Unassigned ({getUnassignedVehicles().length})
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.tab, selectedTab === "assigned" && styles.activeTab]}
-            onPress={() => setSelectedTab("assigned")}
-          >
-            <Text style={[styles.tabText, selectedTab === "assigned" && styles.activeTabText]}>
-              Assigned ({getAssignedVehicles().length})
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Vehicles List */}
-      <FlatList
-        data={filteredVehicles()}
-        renderItem={renderVehicleCard}
-        keyExtractor={(item) => item.id || ""}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        refreshing={loading}
-        onRefresh={fetchData}
-        ListEmptyComponent={
-          <Card style={styles.emptyCard}>
-            <View style={styles.emptyContent}>
-              <MaterialIcons 
-                name={selectedTab === "assigned" ? "assignment-turned-in" : "local-shipping"} 
-                size={48} 
-                color="#9ca3af" 
-              />
-              <Text style={styles.emptyText}>
-                {selectedTab === "assigned" ? "No assigned vehicles" : "No unassigned vehicles"}
-              </Text>
-              <Text style={styles.emptySubtext}>
-                {selectedTab === "assigned" 
-                  ? "All vehicles are currently unassigned" 
-                  : "All vehicles have been assigned to contractors"
-                }
-              </Text>
-            </View>
-          </Card>
-        }
-      />
-
-      {/* Contractor Selection Modal */}
-      {showContractorSelection && selectedVehicle && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select Contractor</Text>
+            <View style={styles.headerLeft}>
               <TouchableOpacity
-                onPress={() => setShowContractorSelection(false)}
-                style={styles.modalCloseButton}
+                onPress={() => navigation.goBack()}
+                style={styles.backButton}
               >
-                <MaterialIcons name="close" size={24} color="#6b7280" />
+                <MaterialIcons name="arrow-back" size={24} color="#374151" />
               </TouchableOpacity>
+              <Text style={styles.headerTitle}>Vehicle Assignment</Text>
             </View>
-
-            <Text style={styles.modalSubtitle}>
-              Assign "{selectedVehicle.vehicleNumber}" to a contractor
-            </Text>
-
-            <ScrollView style={styles.contractorList} showsVerticalScrollIndicator={false}>
-              {contractors.map((contractor) => (
-                <TouchableOpacity
-                  key={contractor.id}
-                  style={styles.contractorItem}
-                  onPress={() => assignVehicle(contractor.id)}
-                >
-                  <View style={styles.contractorInfo}>
-                    <View style={styles.contractorAvatar}>
-                      <MaterialIcons name="business" size={24} color="#3b82f6" />
-                    </View>
-                    <View style={styles.contractorDetails}>
-                      <Text style={styles.contractorName}>{contractor.fullName}</Text>
-                      <Text style={styles.contractorEmail}>{contractor.email}</Text>
-                    </View>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
-                </TouchableOpacity>
-              ))}
-
-              {contractors.length === 0 && (
-                <View style={styles.noContractors}>
-                  <MaterialIcons name="business" size={48} color="#9ca3af" />
-                  <Text style={styles.noContractorsText}>No active contractors found</Text>
-                  <Text style={styles.noContractorsSubtext}>
-                    Please ensure contractors are registered and active
-                  </Text>
-                </View>
-              )}
-            </ScrollView>
           </View>
         </View>
-      )}
 
-      {/* Admin Sidebar */}
-      <AdminSidebar
-        navigation={navigation}
-        isVisible={sidebarVisible}
-        onClose={() => setSidebarVisible(false)}
-        currentScreen="VehicleAssignment"
-      />
-    </SafeAreaView>
+        {/* Search and Tabs */}
+        <View style={styles.searchSection}>
+          <Searchbar
+            placeholder="Search vehicles..."
+            onChangeText={setSearchQuery}
+            value={searchQuery}
+            style={styles.searchBar}
+          />
+
+          <View style={styles.tabContainer}>
+            <TouchableOpacity
+              style={[styles.tab, selectedTab === "unassigned" && styles.activeTab]}
+              onPress={() => setSelectedTab("unassigned")}
+            >
+              <Text style={[styles.tabText, selectedTab === "unassigned" && styles.activeTabText]}>
+                Unassigned ({getUnassignedVehicles().length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tab, selectedTab === "assigned" && styles.activeTab]}
+              onPress={() => setSelectedTab("assigned")}
+            >
+              <Text style={[styles.tabText, selectedTab === "assigned" && styles.activeTabText]}>
+                Assigned ({getAssignedVehicles().length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Vehicles List */}
+        <FlatList
+          data={filteredVehicles()}
+          renderItem={renderVehicleCard}
+          keyExtractor={(item) => item.id || ""}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          refreshing={loading}
+          onRefresh={fetchData}
+          ListEmptyComponent={
+            <Card style={styles.emptyCard}>
+              <View style={styles.emptyContent}>
+                <MaterialIcons
+                  name={selectedTab === "assigned" ? "assignment-turned-in" : "local-shipping"}
+                  size={48}
+                  color="#9ca3af"
+                />
+                <Text style={styles.emptyText}>
+                  {selectedTab === "assigned" ? "No assigned vehicles" : "No unassigned vehicles"}
+                </Text>
+                <Text style={styles.emptySubtext}>
+                  {selectedTab === "assigned"
+                    ? "All vehicles are currently unassigned"
+                    : "All vehicles have been assigned to contractors"
+                  }
+                </Text>
+              </View>
+            </Card>
+          }
+        />
+
+        {/* Contractor Selection Modal */}
+        {showContractorSelection && selectedVehicle && (
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Select Contractor</Text>
+                <TouchableOpacity
+                  onPress={() => setShowContractorSelection(false)}
+                  style={styles.modalCloseButton}
+                >
+                  <MaterialIcons name="close" size={24} color="#6b7280" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalSubtitle}>
+                Assign "{selectedVehicle.vehicleNumber}" to a contractor
+              </Text>
+
+              <ScrollView style={styles.contractorList} showsVerticalScrollIndicator={false}>
+                {contractors.map((contractor) => (
+                  <TouchableOpacity
+                    key={contractor.id}
+                    style={styles.contractorItem}
+                    onPress={() => assignVehicle(contractor.id)}
+                  >
+                    <View style={styles.contractorInfo}>
+                      <View style={styles.contractorAvatar}>
+                        <MaterialIcons name="business" size={24} color="#3b82f6" />
+                      </View>
+                      <View style={styles.contractorDetails}>
+                        <Text style={styles.contractorName}>{contractor.fullName}</Text>
+                        <Text style={styles.contractorEmail}>{contractor.email}</Text>
+                      </View>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
+                  </TouchableOpacity>
+                ))}
+
+                {contractors.length === 0 && (
+                  <View style={styles.noContractors}>
+                    <MaterialIcons name="business" size={48} color="#9ca3af" />
+                    <Text style={styles.noContractorsText}>No active contractors found</Text>
+                    <Text style={styles.noContractorsSubtext}>
+                      Please ensure contractors are registered and active
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        )}
+
+        {/* Admin Sidebar */}
+        <AdminSidebar
+          navigation={navigation}
+          isVisible={sidebarVisible}
+          onClose={() => setSidebarVisible(false)}
+          currentScreen="VehicleAssignment"
+        />
+      </SafeAreaView>
+    </ProtectedRoute>
   )
 }
 
