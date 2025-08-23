@@ -6,6 +6,8 @@ import {
   Animated,
   Dimensions,
   Platform,
+  ScrollView,
+  Easing,
 } from "react-native"
 import { Text } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
@@ -41,7 +43,9 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
   onClose,
   currentScreen = "",
 }) => {
-  const [slideAnim] = useState(new Animated.Value(-width * 0.8))
+  const sidebarWidth = width * 0.8
+  const [slideAnim] = useState(new Animated.Value(-sidebarWidth))
+  const [backdropAnim] = useState(new Animated.Value(0))
 
   const menuSections: MenuSection[] = [
     {
@@ -90,6 +94,13 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           icon: "person",
           screen: "DriverManagement",
           description: "Driver management & assignments"
+        },
+        {
+          id: "swachh-hr",
+          title: "Swachh-HR Staff",
+          icon: "badge",
+          screen: "SwachhHRManagement",
+          description: "HR staff management & roles"
         }
       ]
     },
@@ -152,12 +163,22 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
   ]
 
   React.useEffect(() => {
+    // Animate sidebar slide
     Animated.timing(slideAnim, {
-      toValue: isVisible ? 0 : -width * 0.8,
-      duration: 300,
+      toValue: isVisible ? 0 : -sidebarWidth,
+      duration: 250,
+      easing: Easing.bezier(0.4, 0.0, 0.2, 1),
       useNativeDriver: true,
     }).start()
-  }, [isVisible])
+
+    // Animate backdrop fade
+    Animated.timing(backdropAnim, {
+      toValue: isVisible ? 1 : 0,
+      duration: 250,
+      easing: Easing.bezier(0.4, 0.0, 0.2, 1),
+      useNativeDriver: true,
+    }).start()
+  }, [isVisible, slideAnim, backdropAnim, sidebarWidth])
 
   const handleMenuPress = (screen: string) => {
     onClose()
@@ -174,12 +195,21 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
   return (
     <>
-      {/* Overlay */}
-      <TouchableOpacity
-        style={styles.overlay}
-        activeOpacity={1}
-        onPress={onClose}
-      />
+      {/* Animated Overlay */}
+      <Animated.View
+        style={[
+          styles.overlay,
+          {
+            opacity: backdropAnim,
+          },
+        ]}
+      >
+        <TouchableOpacity
+          style={StyleSheet.absoluteFillObject}
+          activeOpacity={1}
+          onPress={onClose}
+        />
+      </Animated.View>
 
       {/* Sidebar */}
       <Animated.View
@@ -206,8 +236,13 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Menu Items */}
-        <View style={styles.menuContainer}>
+        {/* Menu Items - Now Scrollable */}
+        <ScrollView
+          style={styles.menuContainer}
+          contentContainerStyle={styles.menuContentContainer}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
           {menuSections.map((section) => (
             <View key={section.id} style={styles.menuSection}>
               <View style={styles.sectionHeader}>
@@ -260,7 +295,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
               ))}
             </View>
           ))}
-        </View>
+        </ScrollView>
 
         {/* Footer */}
         <View style={styles.footer}>
@@ -280,7 +315,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: "rgba(0, 0, 0, 0.5)",
-    zIndex: 999,
+    zIndex: 9999,
   },
   sidebar: {
     position: "absolute",
@@ -290,12 +325,14 @@ const styles = StyleSheet.create({
     width: width * 0.8,
     maxWidth: 320,
     backgroundColor: "#ffffff",
-    zIndex: 1000,
-    elevation: 16,
+    zIndex: 10000,
+    elevation: 20,
     shadowColor: "#000",
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    borderTopRightRadius: 16,
+    borderBottomRightRadius: 16,
   },
   header: {
     flexDirection: "row",
@@ -341,7 +378,10 @@ const styles = StyleSheet.create({
   },
   menuContainer: {
     flex: 1,
+  },
+  menuContentContainer: {
     paddingTop: 20,
+    paddingBottom: 20,
   },
   menuSection: {
     marginBottom: 8,

@@ -15,6 +15,7 @@ import { Card, Text } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
 import { signOut } from "firebase/auth"
 import { FIREBASE_AUTH } from "../../../FirebaseConfig"
+import AdminHeader from "../../components/AdminHeader"
 
 const { width } = Dimensions.get("window")
 
@@ -140,25 +141,15 @@ const ContractorDashboard = ({ navigation }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
+
       {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <View style={styles.headerLeft}>
-            <View style={styles.contractorBadge}>
-              <MaterialIcons name="business" size={24} color="#3b82f6" />
-            </View>
-            <View style={styles.headerText}>
-              <Text style={styles.welcomeText}>Welcome back,</Text>
-              <Text style={styles.userName}>{userName}</Text>
-              <Text style={styles.roleText}>Contractor</Text>
-            </View>
-          </View>
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-            <MaterialIcons name="logout" size={20} color="#6b7280" />
-          </TouchableOpacity>
-        </View>
-      </View>
+      <AdminHeader
+        title="Contractor Dashboard"
+        isDashboard={true}
+        userName={userName}
+        showLogoutButton={true}
+        onLogoutPress={handleLogout}
+      />
 
       <ScrollView
         style={styles.content}
@@ -224,9 +215,9 @@ const ContractorDashboard = ({ navigation }: any) => {
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.actionsGrid}>
             {contractorActions.map((action, index) => (
-              <TouchableOpacity 
-                key={index} 
-                onPress={() => handleAction(action.screen)} 
+              <TouchableOpacity
+                key={index}
+                onPress={() => handleAction(action.screen)}
                 activeOpacity={0.7}
               >
                 <Card style={styles.actionCard}>
@@ -255,7 +246,7 @@ const ContractorDashboard = ({ navigation }: any) => {
                 <Text style={styles.performanceTitle}>Collection Summary</Text>
                 <Text style={styles.performanceDate}>Today</Text>
               </View>
-              
+
               <View style={styles.performanceStats}>
                 <View style={styles.performanceItem}>
                   <View style={styles.performanceRow}>

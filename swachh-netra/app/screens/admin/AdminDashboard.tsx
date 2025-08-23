@@ -17,6 +17,7 @@ import { signOut } from "firebase/auth"
 import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 import { ApprovalService } from "../../../services/ApprovalService"
 import AdminSidebar from "../../components/AdminSidebar"
+import AdminHeader from "../../components/AdminHeader"
 import ProtectedRoute from "../../components/ProtectedRoute"
 import { useRequireAdmin } from "../../hooks/useRequireAuth"
 
@@ -188,30 +189,15 @@ const AdminDashboard = ({ navigation }: any) => {
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
         {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <TouchableOpacity
-              onPress={() => setSidebarVisible(true)}
-              style={styles.menuButton}
-            >
-              <MaterialIcons name="menu" size={24} color="#374151" />
-            </TouchableOpacity>
-
-            <View style={styles.headerLeft}>
-              <View style={styles.adminBadge}>
-                <MaterialIcons name="admin-panel-settings" size={24} color="#3b82f6" />
-              </View>
-              <View style={styles.headerText}>
-                <Text style={styles.welcomeText}>Welcome back,</Text>
-                <Text style={styles.userName}>{userName}</Text>
-                <Text style={styles.roleText}>System Administrator</Text>
-              </View>
-            </View>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-              <MaterialIcons name="logout" size={20} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
-        </View>
+        <AdminHeader
+          title="Admin Dashboard"
+          isDashboard={true}
+          userName={userName}
+          showMenuButton={true}
+          showLogoutButton={true}
+          onMenuPress={() => setSidebarVisible(true)}
+          onLogoutPress={handleLogout}
+        />
 
         <ScrollView
           style={styles.content}
@@ -273,43 +259,6 @@ const AdminDashboard = ({ navigation }: any) => {
           </View>
 
           {/* Quick Actions */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Administrative Functions</Text>
-
-            {/* Group actions by category */}
-            {["User Management", "Resource Management", "Assignment Management", "System Overview"].map((category) => {
-              const categoryActions = adminActions.filter(action => action.category === category)
-              if (categoryActions.length === 0) return null
-
-              return (
-                <View key={category} style={styles.categorySection}>
-                  <Text style={styles.categoryTitle}>{category}</Text>
-                  <View style={styles.actionsGrid}>
-                    {categoryActions.map((action, index) => (
-                      <TouchableOpacity
-                        key={index}
-                        onPress={() => navigation.navigate(action.screen)}
-                        activeOpacity={0.7}
-                      >
-                        <Card style={styles.actionCard}>
-                          <View style={styles.actionContent}>
-                            <View style={[styles.actionIcon, { backgroundColor: action.bgColor }]}>
-                              <MaterialIcons name={action.icon as any} size={28} color={action.color} />
-                            </View>
-                            <View style={styles.actionInfo}>
-                              <Text style={styles.actionTitle}>{action.title}</Text>
-                              <Text style={styles.actionDescription}>{action.description}</Text>
-                            </View>
-                            <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
-                          </View>
-                        </Card>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              )
-            })}
-          </View>
 
           {/* Role Distribution */}
           <View style={styles.section}>
@@ -389,62 +338,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f9fafb",
   },
-  header: {
-    backgroundColor: "#ffffff",
-    paddingTop: Platform.OS === "ios" ? 50 : 30,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-  },
-  headerContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  menuButton: {
-    padding: 8,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  adminBadge: {
-    backgroundColor: "#eff6ff",
-    borderRadius: 12,
-    width: 48,
-    height: 48,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 16,
-  },
-  headerText: {
-    flex: 1,
-  },
-  welcomeText: {
-    fontSize: 14,
-    color: "#6b7280",
-    fontWeight: "500",
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#111827",
-    marginTop: 2,
-  },
-  roleText: {
-    fontSize: 12,
-    color: "#9ca3af",
-    fontWeight: "500",
-    marginTop: 2,
-  },
-  logoutButton: {
-    padding: 8,
-    borderRadius: 8,
-  },
+
   content: {
     flex: 1,
   },

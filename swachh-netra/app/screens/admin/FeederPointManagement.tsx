@@ -16,6 +16,7 @@ import * as ImagePicker from "expo-image-picker"
 import * as Location from "expo-location"
 import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 import AdminSidebar from "../../components/AdminSidebar"
+import AdminHeader from "../../components/AdminHeader"
 import { FeederPointService, FeederPoint } from "../../../services/FeederPointService"
 import ProtectedRoute from "../../components/ProtectedRoute"
 import { useRequireAdmin } from "../../hooks/useRequireAuth"
@@ -226,33 +227,21 @@ const FeederPointManagement = ({ navigation }: any) => {
         <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
 
         {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerContent}>
-            <TouchableOpacity
-              onPress={() => setSidebarVisible(true)}
-              style={styles.menuButton}
-            >
-              <MaterialIcons name="menu" size={24} color="#374151" />
-            </TouchableOpacity>
-
-            <View style={styles.headerLeft}>
-              <TouchableOpacity
-                onPress={() => navigation.goBack()}
-                style={styles.backButton}
-              >
-                <MaterialIcons name="arrow-back" size={24} color="#374151" />
-              </TouchableOpacity>
-              <Text style={styles.headerTitle}>Feeder Point Manage</Text>
-            </View>
-
+        <AdminHeader
+          title="Feeder Point Management"
+          showMenuButton={true}
+          showBackButton={true}
+          onMenuPress={() => setSidebarVisible(true)}
+          onBackPress={() => navigation.goBack()}
+          rightComponent={
             <TouchableOpacity
               onPress={() => setShowForm(!showForm)}
               style={styles.addButton}
             >
               <MaterialIcons name={showForm ? "close" : "add"} size={24} color="#3b82f6" />
             </TouchableOpacity>
-          </View>
-        </View>
+          }
+        />
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {showForm && (
@@ -509,39 +498,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#f9fafb",
   },
-  header: {
-    backgroundColor: "#ffffff",
-    paddingTop: Platform.OS === "ios" ? 50 : 30,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
-  },
-  headerContent: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  menuButton: {
-    padding: 8,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  headerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-  backButton: {
-    padding: 8,
-    borderRadius: 8,
-    marginRight: 12,
-  },
-  headerTitle: {
-    fontSize: 17.8,
-    fontWeight: "700",
-    color: "#111827",
-  },
+
   addButton: {
     padding: 8,
     borderRadius: 8,
