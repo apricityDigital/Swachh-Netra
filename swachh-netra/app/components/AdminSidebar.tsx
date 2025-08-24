@@ -101,6 +101,13 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           icon: "badge",
           screen: "SwachhHRManagement",
           description: "HR staff management & roles"
+        },
+        {
+          id: "worker-approvals",
+          title: "Worker Approvals",
+          icon: "approval",
+          screen: "WorkerApprovals",
+          description: "Approve worker requests from HR"
         }
       ]
     },

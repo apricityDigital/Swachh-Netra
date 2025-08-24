@@ -15,6 +15,8 @@ import { Card, Text } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
 import { signOut } from "firebase/auth"
 import { FIREBASE_AUTH } from "../../../FirebaseConfig"
+import { WorkerService } from "../../../services/WorkerService"
+import FirebaseService from "../../../services/FirebaseService"
 
 const { width } = Dimensions.get("window")
 
@@ -76,21 +78,41 @@ const SwachhHRDashboard = ({ navigation }: any) => {
     try {
       const user = FIREBASE_AUTH.currentUser
       if (user) {
-        // TODO: Fetch real HR data from Firebase
-        // For now using mock data
+        // Fetch real user data
+        const userData = await FirebaseService.getUserData(user.uid)
+        if (userData) {
+          setUserName(userData.fullName || "HR Manager")
+        }
+
+        // Fetch real worker data (only active workers)
+        const allWorkers = await WorkerService.getAllWorkers(false) // false = only active workers
+        const activeWorkers = allWorkers // all fetched workers are already active
+
+        // Fetch pending approval requests
+        const pendingRequests = await WorkerService.getPendingWorkerApprovalRequests()
+
         setHrStats({
-          totalWorkers: 45,
-          activeWorkers: 38,
-          todayAttendance: 85,
-          wasteCollected: 2.4,
-          unassignedWorkers: 3,
-          pendingRequests: 2,
-          activeFeederPoints: 15,
+          totalWorkers: allWorkers.length,
+          activeWorkers: activeWorkers.length,
+          todayAttendance: allWorkers.length > 0 ? Math.round((activeWorkers.length / allWorkers.length) * 100) : 0,
+          wasteCollected: 2.4, // This would come from actual waste collection data
+          unassignedWorkers: 0, // Since we only fetch active workers, unassigned would be calculated differently
+          pendingRequests: pendingRequests.length,
+          activeFeederPoints: 15, // This would come from feeder point data
         })
-        setUserName("Sarah Johnson") // TODO: Get from user profile
       }
     } catch (error) {
       console.log("Error fetching dashboard data:", error)
+      // Fallback to default values on error
+      setHrStats({
+        totalWorkers: 0,
+        activeWorkers: 0,
+        todayAttendance: 0,
+        wasteCollected: 0,
+        unassignedWorkers: 0,
+        pendingRequests: 0,
+        activeFeederPoints: 0,
+      })
     } finally {
       setLoading(false)
     }
@@ -121,7 +143,18 @@ const SwachhHRDashboard = ({ navigation }: any) => {
   }
 
   const handleAction = (screen: string) => {
-    Alert.alert("Coming Soon", `${screen} functionality will be implemented soon`)
+    switch (screen) {
+      case "WorkerManagement":
+        navigation.navigate("WorkerManagement")
+        break
+      case "AttendanceTracking":
+      case "PerformanceReports":
+      case "PayrollManagement":
+        Alert.alert("Coming Soon", `${screen} functionality will be implemented soon`)
+        break
+      default:
+        Alert.alert("Coming Soon", `${screen} functionality will be implemented soon`)
+    }
   }
 
   if (loading) {

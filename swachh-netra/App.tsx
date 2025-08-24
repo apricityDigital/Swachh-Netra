@@ -19,6 +19,8 @@ import ContractorDashboard from './app/screens/contractor/ContractorDashboard';
 import DriverApprovals from './app/screens/contractor/DriverApprovals';
 import DriverDashboard from './app/screens/driver/DriverDashboard';
 import SwachhHRDashboard from './app/screens/swachh_hr/SwachhHRDashboard';
+import WorkerManagement from './app/screens/swachh_hr/WorkerManagement';
+import WorkerApprovals from './app/screens/admin/WorkerApprovals';
 
 
 
@@ -48,6 +50,8 @@ export default function App() {
             <Stack.Screen name='DriverApprovals' component={DriverApprovals} options={{ headerShown: false }} />
             <Stack.Screen name='DriverDashboard' component={DriverDashboard} options={{ headerShown: false }} />
             <Stack.Screen name='SwachhHRDashboard' component={SwachhHRDashboard} options={{ headerShown: false }} />
+            <Stack.Screen name='WorkerManagement' component={WorkerManagement} options={{ headerShown: false }} />
+            <Stack.Screen name='WorkerApprovals' component={WorkerApprovals} options={{ headerShown: false }} />
           </Stack.Navigator>
         </NavigationContainer>
       </AuthProvider>
