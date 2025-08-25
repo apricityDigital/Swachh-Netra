@@ -19,6 +19,7 @@ import ContractorDashboard from './app/screens/contractor/ContractorDashboard';
 import DriverApprovals from './app/screens/contractor/DriverApprovals';
 import DriverAssignment from './app/screens/contractor/DriverAssignment';
 import ContractorFeederPoints from './app/screens/contractor/ContractorFeederPoints';
+import ContractorVehicleManagement from './app/screens/contractor/ContractorVehicleManagement';
 import DriverDashboard from './app/screens/driver/DriverDashboard';
 import SwachhHRDashboard from './app/screens/swachh_hr/SwachhHRDashboard';
 import WorkerManagement from './app/screens/swachh_hr/WorkerManagement';
@@ -52,6 +53,7 @@ export default function App() {
             <Stack.Screen name='DriverApprovals' component={DriverApprovals} options={{ headerShown: false }} />
             <Stack.Screen name='DriverAssignment' component={DriverAssignment} options={{ headerShown: false }} />
             <Stack.Screen name='ContractorFeederPoints' component={ContractorFeederPoints} options={{ headerShown: false }} />
+            <Stack.Screen name='ContractorVehicleManagement' component={ContractorVehicleManagement} options={{ headerShown: false }} />
             <Stack.Screen name='DriverDashboard' component={DriverDashboard} options={{ headerShown: false }} />
             <Stack.Screen name='SwachhHRDashboard' component={SwachhHRDashboard} options={{ headerShown: false }} />
             <Stack.Screen name='WorkerManagement' component={WorkerManagement} options={{ headerShown: false }} />

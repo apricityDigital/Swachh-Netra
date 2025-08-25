@@ -15,6 +15,7 @@ import { FIRESTORE_DB } from "../FirebaseConfig"
 export interface Vehicle {
   id?: string
   vehicleNumber: string
+  vehicleName: string
   capacity: number
   vehicleType: string
   registrationDate: Date
@@ -22,6 +23,11 @@ export interface Vehicle {
   createdAt: Date
   createdBy: string
   isActive: boolean
+  // Extended vehicle details
+  manufacturer?: string
+  model?: string
+  year?: string
+  fuelType?: "diesel" | "petrol" | "electric" | "cng"
   // Assignment tracking
   assignedToContractor?: string
   assignedToDriver?: string
@@ -159,6 +165,40 @@ export class VehicleService {
     } catch (error) {
       console.error("Error updating vehicle:", error)
       throw new Error("Failed to update vehicle")
+    }
+  }
+
+  // Toggle vehicle active/inactive status
+  static async toggleVehicleStatus(vehicleId: string): Promise<void> {
+    try {
+      const vehicle = await this.getVehicleById(vehicleId)
+
+      if (!vehicle) {
+        throw new Error("Vehicle not found")
+      }
+
+      const newStatus = vehicle.status === "active" ? "inactive" : "active"
+      const vehicleRef = doc(FIRESTORE_DB, "vehicles", vehicleId)
+
+      await updateDoc(vehicleRef, {
+        status: newStatus,
+        isActive: newStatus === "active",
+        updatedAt: new Date(),
+      })
+    } catch (error) {
+      console.error("Error toggling vehicle status:", error)
+      throw new Error("Failed to toggle vehicle status")
+    }
+  }
+
+  // Get only active vehicles for contractor view
+  static async getActiveVehicles(): Promise<Vehicle[]> {
+    try {
+      const vehicles = await this.getAllVehicles()
+      return vehicles.filter(vehicle => vehicle.status === "active" && vehicle.isActive)
+    } catch (error) {
+      console.error("Error fetching active vehicles:", error)
+      throw new Error("Failed to fetch active vehicles")
     }
   }
 

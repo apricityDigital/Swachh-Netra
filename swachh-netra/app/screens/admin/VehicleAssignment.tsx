@@ -42,6 +42,7 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
   const [assignments, setAssignments] = useState<VehicleAssignmentData[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedTab, setSelectedTab] = useState<"unassigned" | "assigned">("unassigned")
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "maintenance">("all")
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleWithAssignment | null>(null)
   const [showContractorSelection, setShowContractorSelection] = useState(false)
 
@@ -342,13 +343,20 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
   }
 
   const filteredVehicles = () => {
-    const vehicleList = selectedTab === "assigned" ? getAssignedVehicles() : getUnassignedVehicles()
+    let vehicleList = selectedTab === "assigned" ? getAssignedVehicles() : getUnassignedVehicles()
 
+    // Filter by status
+    if (statusFilter !== "all") {
+      vehicleList = vehicleList.filter(vehicle => vehicle.status === statusFilter)
+    }
+
+    // Filter by search query
     if (!searchQuery) return vehicleList
 
     return vehicleList.filter(vehicle =>
       vehicle.vehicleNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       vehicle.vehicleType.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ((vehicle as any).vehicleName && (vehicle as any).vehicleName.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (vehicle.assignedContractorName && vehicle.assignedContractorName.toLowerCase().includes(searchQuery.toLowerCase()))
     )
   }
@@ -444,6 +452,7 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
         <View style={styles.vehicleHeader}>
           <View style={styles.vehicleInfo}>
             <Text style={styles.vehicleNumber}>{item.vehicleNumber}</Text>
+            {(item as any).vehicleName && <Text style={styles.vehicleName}>{(item as any).vehicleName}</Text>}
             <Text style={styles.vehicleType}>{item.vehicleType}</Text>
           </View>
           <View style={styles.vehicleBadges}>
@@ -466,6 +475,20 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
             <MaterialIcons name="local-shipping" size={16} color="#6b7280" />
             <Text style={styles.detailText}>Capacity: {item.capacity} tons</Text>
           </View>
+          {(item as any).manufacturer && (
+            <View style={styles.detailItem}>
+              <MaterialIcons name="business" size={16} color="#6b7280" />
+              <Text style={styles.detailText}>
+                {(item as any).manufacturer} {(item as any).model && `- ${(item as any).model}`}
+              </Text>
+            </View>
+          )}
+          {(item as any).fuelType && (
+            <View style={styles.detailItem}>
+              <MaterialIcons name="local-gas-station" size={16} color="#6b7280" />
+              <Text style={styles.detailText}>Fuel: {(item as any).fuelType.toUpperCase()}</Text>
+            </View>
+          )}
           <View style={styles.detailItem}>
             <MaterialIcons name="calendar-today" size={16} color="#6b7280" />
             <Text style={styles.detailText}>
@@ -542,6 +565,31 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
             value={searchQuery}
             style={styles.searchBar}
           />
+
+          {/* Status Filter */}
+          <View style={styles.filterContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={styles.filterChips}>
+                {(["all", "active", "inactive", "maintenance"] as const).map((status) => (
+                  <Chip
+                    key={status}
+                    selected={statusFilter === status}
+                    onPress={() => setStatusFilter(status)}
+                    style={[
+                      styles.filterChip,
+                      statusFilter === status && styles.filterChipSelected
+                    ]}
+                    textStyle={[
+                      styles.filterChipText,
+                      statusFilter === status && styles.filterChipTextSelected
+                    ]}
+                  >
+                    {status === "all" ? "All Status" : status.charAt(0).toUpperCase() + status.slice(1)}
+                  </Chip>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
 
           <View style={styles.tabContainer}>
             <TouchableOpacity
@@ -763,6 +811,27 @@ const styles = StyleSheet.create({
     elevation: 0,
     marginBottom: 16,
   },
+  filterContainer: {
+    marginBottom: 16,
+  },
+  filterChips: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 4,
+  },
+  filterChip: {
+    backgroundColor: "#ffffff",
+    borderColor: "#d1d5db",
+  },
+  filterChipSelected: {
+    backgroundColor: "#3b82f6",
+  },
+  filterChipText: {
+    color: "#6b7280",
+  },
+  filterChipTextSelected: {
+    color: "#ffffff",
+  },
   tabContainer: {
     flexDirection: "row",
     backgroundColor: "#f3f4f6",
@@ -823,6 +892,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: "#111827",
+    marginBottom: 4,
+  },
+  vehicleName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#374151",
     marginBottom: 4,
   },
   vehicleType: {
