@@ -47,12 +47,15 @@ const FeederPointAssignmentScreen = ({ navigation }: any) => {
 
   useEffect(() => {
     fetchData()
+    // Also fetch contractors on component mount
+    fetchContractors()
   }, [])
 
   useEffect(() => {
     console.log("Modal state changed:", showContractorSelection)
     console.log("Selected feeder point:", selectedFeederPoint?.feederPointName)
-  }, [showContractorSelection, selectedFeederPoint])
+    console.log("Available contractors:", contractors.length)
+  }, [showContractorSelection, selectedFeederPoint, contractors.length])
 
   const fetchData = async () => {
     setLoading(true)
@@ -81,95 +84,158 @@ const FeederPointAssignmentScreen = ({ navigation }: any) => {
 
   const createTestContractor = async () => {
     try {
-      console.log("Creating test contractor...")
+      console.log("🏗️ Creating test contractor...")
+
+      // Generate unique contractor data
+      const timestamp = Date.now()
       const testContractor = {
-        fullName: "Test Contractor",
-        email: "test.contractor@example.com",
-        role: "contractor",
+        uid: `test-contractor-${timestamp}`,
+        fullName: `Test Contractor ${timestamp}`,
+        email: `contractor${timestamp}@swachh-netra.com`,
+        role: "transport_contractor",
+        phoneNumber: "+91-9876543210",
         isActive: true,
+        companyName: "Test Waste Management Co.",
+        licenseNumber: `LIC${timestamp}`,
+        serviceAreas: ["Ward 1", "Ward 2"],
         createdAt: new Date(),
-        uid: "test-contractor-uid"
+        updatedAt: new Date()
       }
 
+      console.log("📝 Creating contractor with data:", testContractor)
       const docRef = await addDoc(collection(FIRESTORE_DB, "users"), testContractor)
-      console.log("Test contractor created with ID:", docRef.id)
-      Alert.alert("Success", "Test contractor created successfully")
+      console.log("✅ Test contractor created with ID:", docRef.id)
 
-      // Refresh contractors list
-      fetchContractors()
+      Alert.alert(
+        "Success",
+        `Test contractor "${testContractor.fullName}" created successfully!\n\nEmail: ${testContractor.email}`,
+        [
+          { text: "OK", onPress: () => fetchContractors() }
+        ]
+      )
     } catch (error) {
-      console.error("Error creating test contractor:", error)
-      Alert.alert("Error", "Failed to create test contractor")
+      console.error("❌ Error creating test contractor:", error)
+      Alert.alert(
+        "Error",
+        `Failed to create test contractor: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        [
+          { text: "OK" },
+          { text: "Retry", onPress: createTestContractor }
+        ]
+      )
     }
   }
 
-  const fetchAllUsers = async () => {
+  const checkDatabaseStatus = async () => {
     try {
-      console.log("Fetching all users for debugging...")
+      console.log("🔍 Checking database status...")
       const usersRef = collection(FIRESTORE_DB, "users")
       const querySnapshot = await getDocs(usersRef)
 
+      console.log(`📊 Total users in database: ${querySnapshot.size}`)
+
       const allUsers: any[] = []
+      const usersByRole: { [key: string]: number } = {}
+
       querySnapshot.forEach((doc) => {
-        allUsers.push({ id: doc.id, ...doc.data() })
+        const data = doc.data()
+        allUsers.push({ id: doc.id, ...data })
+
+        const role = data.role || "unknown"
+        usersByRole[role] = (usersByRole[role] || 0) + 1
+        console.log(`👤 User: ${data.fullName || "No Name"} (${data.email || "No Email"}) - Role: ${role} - Active: ${data.isActive}`)
       })
 
-      console.log("All users in database:", allUsers.length)
-      console.log("Users:", allUsers)
+      console.log("📈 Users by role:", usersByRole)
+      console.log("📋 All users:", allUsers)
 
       const contractorUsers = allUsers.filter(user => user.role === "contractor")
-      console.log("Users with contractor role:", contractorUsers.length)
-      console.log("Contractor users:", contractorUsers)
+      console.log(`🏢 Found ${contractorUsers.length} contractor(s):`, contractorUsers.map(c => c.fullName))
 
+      if (querySnapshot.size === 0) {
+        Alert.alert(
+          "Empty Database",
+          "No users found in the database. This might be a new installation or there could be a connection issue.",
+          [
+            { text: "OK" },
+            { text: "Create Test Contractor", onPress: createTestContractor }
+          ]
+        )
+      } else if (contractorUsers.length === 0) {
+        Alert.alert(
+          "No Contractors Found",
+          `Found ${querySnapshot.size} users in database, but none have the 'contractor' role. Would you like to create a test contractor?`,
+          [
+            { text: "OK" },
+            { text: "Create Test Contractor", onPress: createTestContractor }
+          ]
+        )
+      }
     } catch (error) {
-      console.error("Error fetching all users:", error)
+      console.error("❌ Error checking database status:", error)
+      Alert.alert("Database Error", `Could not connect to database: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
   const fetchContractors = async () => {
     try {
-      console.log("Fetching contractors...")
-
-      // Debug: First fetch all users to see what's in the database
-      await fetchAllUsers()
+      console.log("🔍 Fetching contractors from Firebase...")
 
       const usersRef = collection(FIRESTORE_DB, "users")
 
-      // First, try to get contractors with isActive: true
-      let q = query(
-        usersRef,
-        where("role", "==", "contractor"),
-        where("isActive", "==", true)
-      )
-      let querySnapshot = await getDocs(q)
+      // First, try to get all transport contractors (both active and inactive)
+      console.log("📋 Querying users collection for role='transport_contractor'...")
+      const q = query(usersRef, where("role", "==", "transport_contractor"))
+      const querySnapshot = await getDocs(q)
 
-      let contractorList: Contractor[] = []
+      console.log(`📊 Query returned ${querySnapshot.size} documents`)
+
+      const contractorList: Contractor[] = []
       querySnapshot.forEach((doc) => {
-        contractorList.push({ id: doc.id, ...doc.data() } as Contractor)
+        const data = doc.data()
+        console.log(`👤 Found transport contractor: ${data.fullName} (${data.email}) - Active: ${data.isActive}`)
+
+        contractorList.push({
+          id: doc.id,
+          fullName: data.fullName || "Unknown Name",
+          email: data.email || "No Email",
+          role: data.role,
+          isActive: data.isActive !== false // Default to true if not specified
+        } as Contractor)
       })
 
-      // If no active contractors found, try to get all contractors
-      if (contractorList.length === 0) {
-        console.log("No active contractors found, fetching all contractors...")
-        q = query(usersRef, where("role", "==", "contractor"))
-        querySnapshot = await getDocs(q)
+      console.log(`✅ Successfully fetched ${contractorList.length} transport contractors`)
+      console.log("📋 Transport contractor list:", contractorList.map(c => `${c.fullName} (${c.email})`))
 
-        querySnapshot.forEach((doc) => {
-          const data = doc.data()
-          contractorList.push({
-            id: doc.id,
-            ...data,
-            isActive: data.isActive !== false // Default to true if not specified
-          } as Contractor)
-        })
-      }
-
-      console.log("Found contractors:", contractorList.length)
-      console.log("Contractors:", contractorList)
       setContractors(contractorList)
+
+      // Show success message if contractors found
+      if (contractorList.length > 0) {
+        console.log(`🎉 Found ${contractorList.length} transport contractor(s) ready for assignment`)
+      } else {
+        console.log("⚠️ No transport contractors found in database")
+        Alert.alert(
+          "No Transport Contractors Found",
+          "No transport contractors are registered in the system. Please ensure contractors have signed up with the 'transport_contractor' role.",
+          [
+            { text: "OK" },
+            {
+              text: "Create Test Contractor",
+              onPress: createTestContractor
+            }
+          ]
+        )
+      }
     } catch (error) {
-      console.error("Error fetching contractors:", error)
-      Alert.alert("Error", "Failed to fetch contractors. Please check your connection.")
+      console.error("❌ Error fetching contractors:", error)
+      Alert.alert(
+        "Error",
+        `Failed to fetch contractors: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your connection and try again.`,
+        [
+          { text: "OK" },
+          { text: "Retry", onPress: fetchContractors }
+        ]
+      )
     }
   }
 
@@ -267,13 +333,17 @@ const FeederPointAssignmentScreen = ({ navigation }: any) => {
     }
   }
 
-  const handleAssignPress = (feederPoint: FeederPointWithAssignment) => {
-    console.log("Assign button pressed for:", feederPoint.feederPointName)
-    console.log("Available contractors:", contractors.length)
-    console.log("Setting modal visible...")
+  const handleAssignPress = async (feederPoint: FeederPointWithAssignment) => {
+    console.log("🎯 Assign button pressed for:", feederPoint.feederPointName)
+    console.log("📋 Current contractors in state:", contractors.length)
+
     setSelectedFeederPoint(feederPoint)
     setShowContractorSelection(true)
-    console.log("Modal should now be visible")
+
+    // Automatically fetch contractors when modal opens
+    console.log("🔄 Auto-fetching contractors...")
+    await fetchContractors()
+    console.log("✅ Modal opened and contractors fetched")
   }
 
   const handleUnassignPress = (feederPoint: FeederPointWithAssignment) => {
@@ -452,28 +522,56 @@ const FeederPointAssignmentScreen = ({ navigation }: any) => {
                 Assign "{selectedFeederPoint.feederPointName}" to a contractor
               </Text>
 
-              {/* Debug Info */}
-              <View style={{ padding: 10, backgroundColor: "#f0f0f0", margin: 10, borderRadius: 5 }}>
-                <Text style={{ fontSize: 12, color: "#666" }}>
-                  Debug: Found {contractors.length} contractors
-                </Text>
-                <View style={{ flexDirection: "row", gap: 10, marginTop: 5 }}>
+              {/* Contractor Status Info */}
+              <View style={styles.statusInfo}>
+                <View style={styles.statusRow}>
+                  <MaterialIcons name="people" size={16} color="#3b82f6" />
+                  <Text style={styles.statusText}>
+                    {contractors.length} contractor{contractors.length !== 1 ? 's' : ''} available
+                  </Text>
+                </View>
+                {contractors.length === 0 && (
+                  <View style={styles.statusRow}>
+                    <MaterialIcons name="info" size={16} color="#f59e0b" />
+                    <Text style={styles.statusWarning}>
+                      No contractors found. Create one below or ensure contractors have registered.
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.actionButtons}>
+                <Button
+                  mode="outlined"
+                  onPress={fetchContractors}
+                  style={styles.actionButton}
+                  icon="refresh"
+                >
+                  Refresh List
+                </Button>
+                <Button
+                  mode="outlined"
+                  onPress={checkDatabaseStatus}
+                  style={styles.actionButton}
+                  icon="database"
+                >
+                  Check Database
+                </Button>
+              </View>
+
+              {contractors.length === 0 && (
+                <View style={styles.actionButtons}>
                   <Button
-                    mode="outlined"
-                    onPress={fetchContractors}
-                    style={{ flex: 1 }}
-                  >
-                    Refresh
-                  </Button>
-                  <Button
-                    mode="outlined"
+                    mode="contained"
                     onPress={createTestContractor}
-                    style={{ flex: 1 }}
+                    style={[styles.actionButton, { marginHorizontal: 20 }]}
+                    icon="add"
                   >
-                    Add Test Contractor
+                    Create Test Contractor
                   </Button>
                 </View>
-              </View>
+              )}
 
               <ScrollView style={styles.contractorList} showsVerticalScrollIndicator={false}>
                 {contractors.map((contractor) => (
@@ -837,6 +935,41 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     marginTop: 8,
     textAlign: "center",
+  },
+  // New styles for improved UI
+  statusInfo: {
+    backgroundColor: "#f8fafc",
+    padding: 16,
+    marginHorizontal: 20,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  statusText: {
+    fontSize: 14,
+    color: "#374151",
+    marginLeft: 8,
+    fontWeight: "500",
+  },
+  statusWarning: {
+    fontSize: 12,
+    color: "#d97706",
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  actionButton: {
+    flex: 1,
+    marginHorizontal: 4,
   },
 })
 

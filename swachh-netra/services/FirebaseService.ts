@@ -19,23 +19,9 @@ import {
   runTransaction,
   Timestamp
 } from 'firebase/firestore';
-import {
-  ref,
-  set,
-  get,
-  update,
-  remove,
-  onValue,
-  off,
-  push,
-  serverTimestamp as rtdbServerTimestamp
-} from 'firebase/database';
-import {
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject
-} from 'firebase/storage';
+// TODO: Add Firebase Storage and Realtime Database imports when needed
+// import { ref, set, get, update, remove, onValue, off, push, serverTimestamp as rtdbServerTimestamp } from 'firebase/database';
+// import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -44,7 +30,7 @@ import {
   sendPasswordResetEmail,
   User
 } from 'firebase/auth';
-import { FIRESTORE_DB, FIREBASE_AUTH, FIREBASE_STORAGE, FIREBASE_REALTIME_DB } from '../FirebaseConfig';
+import { FIRESTORE_DB, FIREBASE_AUTH } from '../FirebaseConfig';
 
 // Types
 export interface UserData {
@@ -64,6 +50,13 @@ export interface UserData {
     version: string;
   };
   ipAddresses?: string[];
+  // Role-specific fields
+  contractorId?: string; // For drivers - which contractor they belong to
+  assignedVehicleId?: string; // For drivers - assigned vehicle
+  assignedFeederPointIds?: string[]; // For drivers - assigned feeder points
+  companyName?: string; // For contractors
+  licenseNumber?: string; // For contractors
+  serviceAreas?: string[]; // For contractors
 }
 
 export interface ReportData {
@@ -152,7 +145,7 @@ class FirebaseService {
       };
 
       await setDoc(doc(FIRESTORE_DB, 'users', user.uid), userDocData);
-      
+
       return { user, userData: userDocData };
     } catch (error) {
       console.error('Signup error:', error);
@@ -251,7 +244,7 @@ class FirebaseService {
 
   subscribeToReports(callback: (reports: ReportData[]) => void, filters?: any) {
     let q = query(collection(FIRESTORE_DB, 'reports'), orderBy('createdAt', 'desc'));
-    
+
     if (filters) {
       if (filters.status) {
         q = query(q, where('status', '==', filters.status));
@@ -320,14 +313,12 @@ class FirebaseService {
     }
   }
 
-  // Image Upload
+  // Image Upload - TODO: Add Firebase Storage configuration
   async uploadImage(imageUri: string, path: string): Promise<string> {
     try {
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      const imageRef = storageRef(FIREBASE_STORAGE, path);
-      await uploadBytes(imageRef, blob);
-      return await getDownloadURL(imageRef);
+      // TODO: Implement Firebase Storage upload
+      console.warn('Image upload not implemented - Firebase Storage not configured');
+      return 'placeholder-image-url';
     } catch (error) {
       console.error('Image upload error:', error);
       throw error;
@@ -336,22 +327,19 @@ class FirebaseService {
 
   async deleteImage(imagePath: string) {
     try {
-      const imageRef = storageRef(FIREBASE_STORAGE, imagePath);
-      await deleteObject(imageRef);
+      // TODO: Implement Firebase Storage delete
+      console.warn('Image delete not implemented - Firebase Storage not configured');
     } catch (error) {
       console.error('Image delete error:', error);
       throw error;
     }
   }
 
-  // Real-time location tracking
+  // Real-time location tracking - TODO: Add Firebase Realtime Database configuration
   async updateVehicleLocation(vehicleId: string, location: { latitude: number; longitude: number }) {
     try {
-      const locationRef = ref(FIREBASE_REALTIME_DB, `vehicle_locations/${vehicleId}`);
-      await set(locationRef, {
-        ...location,
-        timestamp: rtdbServerTimestamp()
-      });
+      // TODO: Implement Realtime Database location tracking
+      console.warn('Location tracking not implemented - Firebase Realtime Database not configured');
     } catch (error) {
       console.error('Update vehicle location error:', error);
       throw error;
@@ -359,11 +347,9 @@ class FirebaseService {
   }
 
   subscribeToVehicleLocation(vehicleId: string, callback: (location: any) => void) {
-    const locationRef = ref(FIREBASE_REALTIME_DB, `vehicle_locations/${vehicleId}`);
-    const unsubscribe = onValue(locationRef, (snapshot) => {
-      callback(snapshot.val());
-    });
-    return () => off(locationRef, 'value', unsubscribe);
+    // TODO: Implement Realtime Database subscription
+    console.warn('Location subscription not implemented - Firebase Realtime Database not configured');
+    return () => { }; // Return empty unsubscribe function
   }
 
   // Batch operations

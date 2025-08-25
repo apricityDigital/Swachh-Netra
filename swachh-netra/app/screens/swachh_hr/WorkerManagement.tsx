@@ -547,7 +547,7 @@ const WorkerManagement = ({ navigation }: any) => {
                 loading={operationLoading}
                 disabled={operationLoading}
               >
-                Submit for Approval
+                Submit
               </Button>
             </View>
           </ScrollView>
@@ -983,6 +983,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginTop: 24,
     gap: 12,
+        // Add: margin from the bottom in both buttons 
+        marginBottom: 24,
+       
+
+
   },
   cancelButton: {
     flex: 1,

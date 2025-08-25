@@ -12,7 +12,7 @@ import {
 } from "react-native"
 import { Card, Text, Button, Chip, Searchbar } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
-import { collection, getDocs, query, where } from "firebase/firestore"
+import { collection, getDocs, query, where, addDoc } from "firebase/firestore"
 import { FIRESTORE_DB } from "../../../FirebaseConfig"
 import AdminSidebar from "../../components/AdminSidebar"
 import { VehicleService, Vehicle, VehicleAssignment as VehicleAssignmentData } from "../../../services/VehicleService"
@@ -47,12 +47,15 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
 
   useEffect(() => {
     fetchData()
+    // Also fetch contractors on component mount
+    fetchContractors()
   }, [])
 
   useEffect(() => {
-    console.log("Modal state changed:", showContractorSelection)
-    console.log("Selected vehicle:", selectedVehicle?.vehicleNumber)
-  }, [showContractorSelection, selectedVehicle])
+    console.log("[VehicleAssignment] Modal state changed:", showContractorSelection)
+    console.log("[VehicleAssignment] Selected vehicle:", selectedVehicle?.vehicleNumber)
+    console.log("[VehicleAssignment] Available contractors:", contractors.length)
+  }, [showContractorSelection, selectedVehicle, contractors.length])
 
   const fetchData = async () => {
     setLoading(true)
@@ -81,43 +84,227 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
 
   const fetchContractors = async () => {
     try {
-      console.log("Fetching contractors...")
+      console.log("🔍 [VehicleAssignment] Fetching contractors from Firebase...")
+
       const usersRef = collection(FIRESTORE_DB, "users")
 
-      // First, try to get contractors with isActive: true
-      let q = query(
-        usersRef,
-        where("role", "==", "contractor"),
-        where("isActive", "==", true)
-      )
-      let querySnapshot = await getDocs(q)
+      // First, let's see ALL users to debug the issue
+      console.log("🔍 [VehicleAssignment] First, fetching ALL users to debug...")
+      const allUsersSnapshot = await getDocs(usersRef)
+      console.log(`📊 [VehicleAssignment] Total users in database: ${allUsersSnapshot.size}`)
 
-      let contractorList: Contractor[] = []
-      querySnapshot.forEach((doc) => {
-        contractorList.push({ id: doc.id, ...doc.data() } as Contractor)
+      const allUsers: any[] = []
+      allUsersSnapshot.forEach((doc) => {
+        const data = doc.data()
+        allUsers.push({ id: doc.id, ...data })
+        console.log(`👥 [VehicleAssignment] User: ${data.fullName || data.name || 'No Name'} | Email: ${data.email || 'No Email'} | Role: ${data.role || 'No Role'} | ContractorId: ${data.contractorId || 'None'}`)
       })
 
-      // If no active contractors found, try to get all contractors
-      if (contractorList.length === 0) {
-        console.log("No active contractors found, fetching all contractors...")
-        q = query(usersRef, where("role", "==", "contractor"))
-        querySnapshot = await getDocs(q)
+      // Now filter for transport contractors - try multiple approaches
+      console.log("📋 [VehicleAssignment] Filtering for transport contractors...")
 
-        querySnapshot.forEach((doc) => {
-          const data = doc.data()
-          contractorList.push({
-            id: doc.id,
-            ...data,
-            isActive: data.isActive !== false
-          } as Contractor)
+      // Method 1: Users with role='transport_contractor'
+      const contractorsByRole = allUsers.filter(user => user.role === "transport_contractor")
+      console.log(`🏢 [VehicleAssignment] Method 1 - Users with role='transport_contractor': ${contractorsByRole.length}`)
+
+      // Method 2: Users with contractorId field (might be drivers assigned to contractors)
+      const usersWithContractorId = allUsers.filter(user => user.contractorId)
+      console.log(`🚛 [VehicleAssignment] Method 2 - Users with contractorId field: ${usersWithContractorId.length}`)
+
+      // Method 3: Check for different role field variations
+      const contractorVariations = allUsers.filter(user =>
+        user.role === "transport_contractor" ||
+        user.userRole === "transport_contractor" ||
+        user.type === "transport_contractor" ||
+        user.accountType === "transport_contractor" ||
+        user.role === "contractor" // Also check for old contractor role
+      )
+      console.log(`🔄 [VehicleAssignment] Method 3 - Role variations: ${contractorVariations.length}`)
+
+      // Use the contractors found by role
+      const contractorList: Contractor[] = []
+      contractorsByRole.forEach((user, index) => {
+        console.log(`👤 [VehicleAssignment] Processing contractor ${index + 1}:`, {
+          id: user.id,
+          fullName: user.fullName || user.name,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+          createdAt: user.createdAt,
+          uid: user.uid
+        })
+
+        contractorList.push({
+          id: user.id,
+          fullName: user.fullName || user.name || `Contractor ${index + 1}`,
+          email: user.email || `contractor${index + 1}@unknown.com`,
+          role: user.role,
+          isActive: user.isActive !== false
+        } as Contractor)
+      })
+
+      console.log(`✅ [VehicleAssignment] Final transport contractor list: ${contractorList.length} contractors`)
+      contractorList.forEach((contractor, index) => {
+        console.log(`📋 [VehicleAssignment] Transport Contractor ${index + 1}: ${contractor.fullName} (${contractor.email}) - ID: ${contractor.id}`)
+      })
+
+      setContractors(contractorList)
+
+      // Show detailed results
+      if (contractorList.length > 0) {
+        console.log(`🎉 [VehicleAssignment] Found ${contractorList.length} transport contractor(s) ready for vehicle assignment`)
+        if (contractorList.length < 3) {
+          console.log(`⚠️ [VehicleAssignment] Expected 3 transport contractors but found ${contractorList.length}. Check the debug logs above.`)
+        }
+      } else {
+        console.log("⚠️ [VehicleAssignment] No contractors found in database")
+        console.log("🔍 [VehicleAssignment] Debug info:")
+        console.log(`- Total users: ${allUsers.length}`)
+        console.log(`- Users by role breakdown:`, allUsers.reduce((acc, user) => {
+          const role = user.role || 'no-role'
+          acc[role] = (acc[role] || 0) + 1
+          return acc
+        }, {}))
+      }
+    } catch (error) {
+      console.error("❌ [VehicleAssignment] Error fetching contractors:", error)
+      Alert.alert(
+        "Error",
+        `Failed to fetch contractors: ${error instanceof Error ? error.message : 'Unknown error'}. Please check your connection and try again.`,
+        [
+          { text: "OK" },
+          { text: "Retry", onPress: fetchContractors }
+        ]
+      )
+    }
+  }
+
+  const createTestContractor = async () => {
+    try {
+      console.log("🏗️ [VehicleAssignment] Creating test contractor...")
+
+      // Generate unique contractor data
+      const timestamp = Date.now()
+      const testContractor = {
+        uid: `test-contractor-${timestamp}`,
+        fullName: `Test Contractor ${timestamp}`,
+        email: `contractor${timestamp}@swachh-netra.com`,
+        role: "transport_contractor",
+        phoneNumber: "+91-9876543210",
+        isActive: true,
+        companyName: "Test Waste Management Co.",
+        licenseNumber: `LIC${timestamp}`,
+        serviceAreas: ["Ward 1", "Ward 2"],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+
+      console.log("📝 [VehicleAssignment] Creating contractor with data:", testContractor)
+      const docRef = await addDoc(collection(FIRESTORE_DB, "users"), testContractor)
+      console.log("✅ [VehicleAssignment] Test contractor created with ID:", docRef.id)
+
+      Alert.alert(
+        "Success",
+        `Test contractor "${testContractor.fullName}" created successfully!\n\nEmail: ${testContractor.email}`,
+        [
+          { text: "OK", onPress: () => fetchContractors() }
+        ]
+      )
+    } catch (error) {
+      console.error("❌ [VehicleAssignment] Error creating test contractor:", error)
+      Alert.alert(
+        "Error",
+        `Failed to create test contractor: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        [
+          { text: "OK" },
+          { text: "Retry", onPress: createTestContractor }
+        ]
+      )
+    }
+  }
+
+  const checkDatabaseStatus = async () => {
+    try {
+      console.log("🔍 [VehicleAssignment] Detailed database status check...")
+      const usersRef = collection(FIRESTORE_DB, "users")
+      const querySnapshot = await getDocs(usersRef)
+
+      console.log(`📊 [VehicleAssignment] Total users in database: ${querySnapshot.size}`)
+
+      const allUsers: any[] = []
+      const usersByRole: { [key: string]: number } = {}
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data()
+        allUsers.push({ id: doc.id, ...data })
+
+        const role = data.role || "unknown"
+        usersByRole[role] = (usersByRole[role] || 0) + 1
+
+        // Detailed logging for each user
+        console.log(`👤 [VehicleAssignment] User Details:`, {
+          id: doc.id,
+          fullName: data.fullName || data.name || "No Name",
+          email: data.email || "No Email",
+          role: data.role || "No Role",
+          isActive: data.isActive,
+          uid: data.uid,
+          contractorId: data.contractorId,
+          createdAt: data.createdAt?.toDate?.() || data.createdAt
+        })
+      })
+
+      console.log("📈 [VehicleAssignment] Users by role breakdown:", usersByRole)
+
+      const contractorUsers = allUsers.filter(user => user.role === "transport_contractor")
+      console.log(`🏢 [VehicleAssignment] Contractor analysis:`)
+      console.log(`- Total contractors found: ${contractorUsers.length}`)
+      console.log(`- Expected contractors: 3`)
+      console.log(`- Missing contractors: ${Math.max(0, 3 - contractorUsers.length)}`)
+
+      contractorUsers.forEach((contractor, index) => {
+        console.log(`🏢 [VehicleAssignment] Contractor ${index + 1}:`, {
+          id: contractor.id,
+          name: contractor.fullName || contractor.name,
+          email: contractor.email,
+          active: contractor.isActive,
+          uid: contractor.uid
+        })
+      })
+
+      // Create detailed alert message
+      let alertMessage = `Database Analysis:\n\n`
+      alertMessage += `📊 Total Users: ${querySnapshot.size}\n`
+      alertMessage += `🏢 Contractors Found: ${contractorUsers.length}\n`
+      alertMessage += `🎯 Expected: 3 contractors\n\n`
+
+      if (contractorUsers.length > 0) {
+        alertMessage += `Contractor Details:\n`
+        contractorUsers.forEach((c, i) => {
+          alertMessage += `${i + 1}. ${c.fullName || c.name || 'No Name'}\n`
+          alertMessage += `   📧 ${c.email || 'No Email'}\n`
+          alertMessage += `   🆔 ${c.id}\n\n`
         })
       }
 
-      console.log("Found contractors:", contractorList.length)
-      setContractors(contractorList)
+      alertMessage += `\nRole Breakdown:\n`
+      Object.entries(usersByRole).forEach(([role, count]) => {
+        alertMessage += `• ${role}: ${count}\n`
+      })
+
+      if (contractorUsers.length < 3) {
+        alertMessage += `\n⚠️ Missing ${3 - contractorUsers.length} contractor(s)`
+        alertMessage += `\nCheck console logs for detailed user analysis.`
+      }
+
+      Alert.alert("Detailed Database Status", alertMessage, [
+        { text: "OK" },
+        { text: "Refresh Contractors", onPress: fetchContractors }
+      ])
+
     } catch (error) {
-      console.error("Error fetching contractors:", error)
-      Alert.alert("Error", "Failed to fetch contractors. Please check your connection.")
+      console.error("❌ [VehicleAssignment] Error checking database status:", error)
+      Alert.alert("Database Error", `Could not connect to database: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -218,13 +405,17 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
     }
   }
 
-  const handleAssignPress = (vehicle: VehicleWithAssignment) => {
-    console.log("Assign button pressed for:", vehicle.vehicleNumber)
-    console.log("Available contractors:", contractors.length)
-    console.log("Setting modal visible...")
+  const handleAssignPress = async (vehicle: VehicleWithAssignment) => {
+    console.log("🎯 [VehicleAssignment] Assign button pressed for:", vehicle.vehicleNumber)
+    console.log("📋 [VehicleAssignment] Current contractors in state:", contractors.length)
+
     setSelectedVehicle(vehicle)
     setShowContractorSelection(true)
-    console.log("Modal should now be visible")
+
+    // Automatically fetch contractors when modal opens
+    console.log("🔄 [VehicleAssignment] Auto-fetching contractors...")
+    await fetchContractors()
+    console.log("✅ [VehicleAssignment] Modal opened and contractors fetched")
   }
 
   const handleUnassignPress = (vehicle: VehicleWithAssignment) => {
@@ -306,7 +497,7 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
               mode="contained"
               onPress={() => handleAssignPress(item)}
               style={styles.assignButton}
-              icon="person-add"
+              icon="person-plus"
             >
               Assign to Contractor
             </Button>
@@ -422,25 +613,79 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
                 Assign "{selectedVehicle.vehicleNumber}" to a contractor
               </Text>
 
-              <ScrollView style={styles.contractorList} showsVerticalScrollIndicator={false}>
-                {contractors.map((contractor) => (
-                  <TouchableOpacity
-                    key={contractor.id}
-                    style={styles.contractorItem}
-                    onPress={() => assignVehicle(contractor.id)}
+              {/* Contractor Status Info */}
+              <View style={styles.statusInfo}>
+                <View style={styles.statusRow}>
+                  <MaterialIcons name="people" size={16} color="#3b82f6" />
+                  <Text style={styles.statusText}>
+                    {contractors.length} contractor{contractors.length !== 1 ? 's' : ''} available
+                  </Text>
+                </View>
+                {contractors.length === 0 && (
+                  <View style={styles.statusRow}>
+                    <MaterialIcons name="info" size={16} color="#f59e0b" />
+                    <Text style={styles.statusWarning}>
+                      No contractors found. Create one below or ensure contractors have registered.
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Action Buttons */}
+              <View style={styles.actionButtons}>
+                <Button
+                  mode="outlined"
+                  onPress={fetchContractors}
+                  style={styles.actionButton}
+                  icon="refresh"
+                >
+                  Refresh List
+                </Button>
+                <Button
+                  mode="outlined"
+                  onPress={checkDatabaseStatus}
+                  style={styles.actionButton}
+                  icon="database"
+                >
+                  Check Database
+                </Button>
+              </View>
+
+              {contractors.length === 0 && (
+                <View style={styles.actionButtons}>
+                  <Button
+                    mode="contained"
+                    onPress={createTestContractor}
+                    style={[styles.actionButton, { marginHorizontal: 20 }]}
+                    icon="add"
                   >
-                    <View style={styles.contractorInfo}>
-                      <View style={styles.contractorAvatar}>
-                        <MaterialIcons name="business" size={24} color="#3b82f6" />
+                    Create Test Contractor
+                  </Button>
+                </View>
+              )}
+
+              <ScrollView style={styles.contractorList} showsVerticalScrollIndicator={false}>
+                {contractors.map((contractor, index) => {
+                  console.log(`🏢 [VehicleAssignment] Rendering contractor ${index + 1}:`, contractor.fullName, contractor.email)
+                  return (
+                    <TouchableOpacity
+                      key={contractor.id}
+                      style={styles.contractorItem}
+                      onPress={() => assignVehicle(contractor.id)}
+                    >
+                      <View style={styles.contractorInfo}>
+                        <View style={styles.contractorAvatar}>
+                          <MaterialIcons name="business" size={24} color="#3b82f6" />
+                        </View>
+                        <View style={styles.contractorDetails}>
+                          <Text style={styles.contractorName}>{contractor.fullName}</Text>
+                          <Text style={styles.contractorEmail}>{contractor.email}</Text>
+                        </View>
                       </View>
-                      <View style={styles.contractorDetails}>
-                        <Text style={styles.contractorName}>{contractor.fullName}</Text>
-                        <Text style={styles.contractorEmail}>{contractor.email}</Text>
-                      </View>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
-                  </TouchableOpacity>
-                ))}
+                      <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
+                    </TouchableOpacity>
+                  )
+                })}
 
                 {contractors.length === 0 && (
                   <View style={styles.noContractors}>
@@ -772,6 +1017,41 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     marginTop: 8,
     textAlign: "center",
+  },
+  // New styles for improved UI
+  statusInfo: {
+    backgroundColor: "#f8fafc",
+    padding: 16,
+    marginHorizontal: 20,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  statusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  statusText: {
+    fontSize: 14,
+    color: "#374151",
+    marginLeft: 8,
+    fontWeight: "500",
+  },
+  statusWarning: {
+    fontSize: 12,
+    color: "#d97706",
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
+  },
+  actionButtons: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  actionButton: {
+    flex: 1,
+    marginHorizontal: 4,
   },
 })
 

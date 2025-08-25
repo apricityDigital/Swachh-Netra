@@ -1198,6 +1198,9 @@ const styles = StyleSheet.create({
   section: {
     paddingHorizontal: SPACING.xl,
     marginBottom: SPACING.xxl,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
   },
   sectionTitleContainer: {
     flexDirection: "row",
@@ -1305,7 +1308,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    marginHorizontal: -SPACING.xs, // Negative margin for consistent spacing
+    marginHorizontal: -SPACING.xs,   // Negative margin for consistent spacing
   },
   statCard: {
     width: "48%", // Precise width for 2-column layout
@@ -1320,6 +1323,7 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     // Ensure consistent height
     minHeight: 100,
+    
   },
   statContent: {
     flexDirection: "row",

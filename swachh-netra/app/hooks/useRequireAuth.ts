@@ -19,7 +19,7 @@ export const useRequireAuth = (
     redirectTo = 'Login',
     showAlert = true
   } = options;
-
+ 
   const { 
     userData, 
     isAuthenticated, 
@@ -27,6 +27,8 @@ export const useRequireAuth = (
     hasRole, 
     hasPermission 
   } = useAuth();
+
+  // Redirect to login page if user is not authenticated
 
   useEffect(() => {
     if (loading) return;
@@ -40,6 +42,7 @@ export const useRequireAuth = (
         );
       } else {
         navigation.replace(redirectTo);
+
       }
       return;
     }

@@ -11,36 +11,49 @@ import {
   Dimensions,
   Alert,
 } from "react-native"
-import { Card, Text } from "react-native-paper"
+import { Card, Text, Button } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
 import { signOut } from "firebase/auth"
 import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 import AdminHeader from "../../components/AdminHeader"
+import { ContractorService, ContractorDashboardStats } from "../../../services/ContractorService"
+import FirebaseService from "../../../services/FirebaseService"
 
 const { width } = Dimensions.get("window")
 
 const ContractorDashboard = ({ navigation }: any) => {
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [contractorStats, setContractorStats] = useState({
-    totalDrivers: 12,
-    activeDrivers: 10,
-    totalVehicles: 8,
-    activeVehicles: 7,
-    todayPickups: 45,
-    completedPickups: 38,
-    pendingApprovals: 3,
+  const [contractorStats, setContractorStats] = useState<ContractorDashboardStats>({
+    totalDrivers: 0,
+    activeDrivers: 0,
+    totalVehicles: 0,
+    activeVehicles: 0,
+    assignedFeederPoints: 0,
+    todayTrips: {
+      total: 0,
+      completed: 0,
+      pending: 0,
+    },
+    todayAttendance: {
+      totalWorkers: 0,
+      presentWorkers: 0,
+      absentWorkers: 0,
+    },
+    pendingApprovals: 0,
   })
   const [userName, setUserName] = useState("Contractor")
+  const [contractorId, setContractorId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const contractorActions = [
     {
-      title: "Manage Drivers",
-      description: "View and approve driver requests",
-      icon: "people",
+      title: "Assign Drivers",
+      description: "Assign vehicles and routes to drivers",
+      icon: "assignment-ind",
       color: "#3b82f6",
       bgColor: "#eff6ff",
-      screen: "DriverApprovals",
+      screen: "DriverAssignment",
     },
     {
       title: "Vehicle Management",
@@ -51,19 +64,35 @@ const ContractorDashboard = ({ navigation }: any) => {
       screen: "VehicleManagement",
     },
     {
-      title: "Route Planning",
-      description: "Plan and optimize routes",
-      icon: "map",
+      title: "Trip Monitoring",
+      description: "Monitor daily trips and progress",
+      icon: "track-changes",
       color: "#f59e0b",
       bgColor: "#fffbeb",
-      screen: "RoutePlanning",
+      screen: "TripMonitoring",
+    },
+    {
+      title: "Worker Attendance",
+      description: "View worker attendance records",
+      icon: "how-to-reg",
+      color: "#8b5cf6",
+      bgColor: "#faf5ff",
+      screen: "WorkerAttendance",
+    },
+    {
+      title: "Feeder Points",
+      description: "View assigned feeder points",
+      icon: "location-on",
+      color: "#ef4444",
+      bgColor: "#fef2f2",
+      screen: "FeederPoints",
     },
     {
       title: "Reports",
       description: "View performance reports",
       icon: "analytics",
-      color: "#8b5cf6",
-      bgColor: "#faf5ff",
+      color: "#06b6d4",
+      bgColor: "#f0f9ff",
       screen: "Reports",
     },
   ]
@@ -72,26 +101,55 @@ const ContractorDashboard = ({ navigation }: any) => {
     fetchDashboardData()
   }, [])
 
+  // Set up real-time data subscription
+  useEffect(() => {
+    if (!contractorId) return
+
+    const unsubscribe = ContractorService.subscribeToContractorData(
+      contractorId,
+      (data) => {
+        setContractorStats(data)
+        setError(null)
+      }
+    )
+
+    return unsubscribe
+  }, [contractorId])
+
   const fetchDashboardData = async () => {
     setLoading(true)
+    setError(null)
     try {
       const user = FIREBASE_AUTH.currentUser
       if (user) {
-        // TODO: Fetch real contractor data from Firebase
-        // For now using mock data
-        setContractorStats({
-          totalDrivers: 12,
-          activeDrivers: 10,
-          totalVehicles: 8,
-          activeVehicles: 7,
-          todayPickups: 45,
-          completedPickups: 38,
-          pendingApprovals: 3,
-        })
-        setUserName("John Smith") // TODO: Get from user profile
+        // Get user profile data
+        const userData = await FirebaseService.getUserData(user.uid)
+        if (userData) {
+          setUserName(userData.fullName)
+          setContractorId(user.uid)
+
+          // Fetch real-time contractor dashboard data
+          const dashboardData = await ContractorService.getContractorDashboardData(user.uid)
+          setContractorStats(dashboardData)
+        } else {
+          throw new Error("User data not found")
+        }
+      } else {
+        throw new Error("User not authenticated")
       }
     } catch (error) {
-      console.log("Error fetching dashboard data:", error)
+      console.error("Error fetching dashboard data:", error)
+      setError(error instanceof Error ? error.message : "Failed to load dashboard data")
+
+      // Show user-friendly error message
+      Alert.alert(
+        "Error Loading Data",
+        "Unable to load dashboard data. Please check your connection and try again.",
+        [
+          { text: "Retry", onPress: fetchDashboardData },
+          { text: "Cancel", style: "cancel" }
+        ]
+      )
     } finally {
       setLoading(false)
     }
@@ -122,10 +180,27 @@ const ContractorDashboard = ({ navigation }: any) => {
   }
 
   const handleAction = (screen: string) => {
-    if (screen === "DriverApprovals") {
-      navigation.navigate("DriverApprovals")
-    } else {
-      Alert.alert("Coming Soon", `${screen} functionality will be implemented soon`)
+    switch (screen) {
+      case "DriverAssignment":
+        navigation.navigate("DriverAssignment", { contractorId })
+        break
+      case "VehicleManagement":
+        navigation.navigate("ContractorVehicleManagement", { contractorId })
+        break
+      case "TripMonitoring":
+        navigation.navigate("TripMonitoring", { contractorId })
+        break
+      case "WorkerAttendance":
+        navigation.navigate("WorkerAttendance", { contractorId })
+        break
+      case "FeederPoints":
+        navigation.navigate("ContractorFeederPoints", { contractorId })
+        break
+      case "Reports":
+        navigation.navigate("ContractorReports", { contractorId })
+        break
+      default:
+        Alert.alert("Coming Soon", `${screen} functionality will be implemented soon`)
     }
   }
 
@@ -134,6 +209,25 @@ const ContractorDashboard = ({ navigation }: any) => {
       <View style={styles.loadingContainer}>
         <MaterialIcons name="business" size={48} color="#3b82f6" />
         <Text style={styles.loadingText}>Loading Contractor Dashboard...</Text>
+        <Text style={styles.loadingSubtext}>Fetching real-time data...</Text>
+      </View>
+    )
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <MaterialIcons name="error-outline" size={48} color="#ef4444" />
+        <Text style={styles.errorTitle}>Unable to Load Dashboard</Text>
+        <Text style={styles.errorText}>{error}</Text>
+        <Button
+          mode="contained"
+          onPress={fetchDashboardData}
+          style={styles.retryButton}
+          icon="refresh"
+        >
+          Retry
+        </Button>
       </View>
     )
   }
@@ -252,9 +346,9 @@ const ContractorDashboard = ({ navigation }: any) => {
                   <View style={styles.performanceRow}>
                     <View style={styles.performanceLabel}>
                       <MaterialIcons name="assignment-turned-in" size={16} color="#10b981" />
-                      <Text style={styles.performanceText}>Completed Pickups</Text>
+                      <Text style={styles.performanceText}>Completed Trips</Text>
                     </View>
-                    <Text style={styles.performanceValue}>{contractorStats.completedPickups}</Text>
+                    <Text style={styles.performanceValue}>{contractorStats.todayTrips.completed}</Text>
                   </View>
                 </View>
 
@@ -262,19 +356,29 @@ const ContractorDashboard = ({ navigation }: any) => {
                   <View style={styles.performanceRow}>
                     <View style={styles.performanceLabel}>
                       <MaterialIcons name="assignment" size={16} color="#3b82f6" />
-                      <Text style={styles.performanceText}>Total Pickups</Text>
+                      <Text style={styles.performanceText}>Total Trips</Text>
                     </View>
-                    <Text style={styles.performanceValue}>{contractorStats.todayPickups}</Text>
+                    <Text style={styles.performanceValue}>{contractorStats.todayTrips.total}</Text>
                   </View>
                 </View>
 
                 <View style={styles.performanceItem}>
                   <View style={styles.performanceRow}>
                     <View style={styles.performanceLabel}>
-                      <MaterialIcons name="local-shipping" size={16} color="#f59e0b" />
-                      <Text style={styles.performanceText}>Active Vehicles</Text>
+                      <MaterialIcons name="people" size={16} color="#10b981" />
+                      <Text style={styles.performanceText}>Workers Present</Text>
                     </View>
-                    <Text style={styles.performanceValue}>{contractorStats.activeVehicles}</Text>
+                    <Text style={styles.performanceValue}>{contractorStats.todayAttendance.presentWorkers}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.performanceItem}>
+                  <View style={styles.performanceRow}>
+                    <View style={styles.performanceLabel}>
+                      <MaterialIcons name="location-on" size={16} color="#f59e0b" />
+                      <Text style={styles.performanceText}>Feeder Points</Text>
+                    </View>
+                    <Text style={styles.performanceValue}>{contractorStats.assignedFeederPoints}</Text>
                   </View>
                 </View>
               </View>
@@ -503,6 +607,40 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#111827",
     fontWeight: "600",
+  },
+  // New styles for enhanced UI
+  loadingSubtext: {
+    fontSize: 14,
+    color: "#9ca3af",
+    fontWeight: "400",
+    marginTop: 8,
+    textAlign: "center",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 20,
+  },
+  errorTitle: {
+    fontSize: 18,
+    color: "#111827",
+    fontWeight: "600",
+    marginTop: 16,
+    textAlign: "center",
+  },
+  errorText: {
+    fontSize: 14,
+    color: "#6b7280",
+    fontWeight: "400",
+    marginTop: 8,
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  retryButton: {
+    marginTop: 20,
+    minWidth: 120,
   },
 })
 
