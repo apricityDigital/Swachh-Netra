@@ -186,7 +186,7 @@ const ContractorFeederPoints = ({ route, navigation }: any) => {
             <FlatList
               data={filteredFeederPoints}
               renderItem={renderFeederPointCard}
-              keyExtractor={(item) => item.id!}
+              keyExtractor={(item, index) => item.id || `feeder-point-${index}`}
               scrollEnabled={false}
               ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
             />

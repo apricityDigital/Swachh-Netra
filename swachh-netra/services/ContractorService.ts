@@ -112,13 +112,14 @@ export class ContractorService {
   // Get contractor's real-time dashboard data
   static async getContractorDashboardData(contractorId: string): Promise<ContractorDashboardStats> {
     try {
+      // Fetch data with individual error handling to prevent total failure
       const [
         drivers,
         vehicles,
         feederPointAssignments,
         todayTrips,
         workerAttendance
-      ] = await Promise.all([
+      ] = await Promise.allSettled([
         this.getContractorDrivers(contractorId),
         this.getContractorVehicles(contractorId),
         this.getContractorFeederPoints(contractorId),
@@ -126,29 +127,36 @@ export class ContractorService {
         this.getTodayWorkerAttendance(contractorId)
       ])
 
-      const activeDrivers = drivers.filter(d => d.isActive).length
-      const activeVehicles = vehicles.filter(v => v.status === "active").length
+      // Extract values or use empty arrays for failed requests
+      const driversData = drivers.status === 'fulfilled' ? drivers.value : []
+      const vehiclesData = vehicles.status === 'fulfilled' ? vehicles.value : []
+      const feederPointsData = feederPointAssignments.status === 'fulfilled' ? feederPointAssignments.value : []
+      const tripsData = todayTrips.status === 'fulfilled' ? todayTrips.value : []
+      const attendanceData = workerAttendance.status === 'fulfilled' ? workerAttendance.value : []
 
-      const completedTrips = todayTrips.filter(t => t.status === "completed").length
-      const pendingTrips = todayTrips.filter(t => t.status === "pending").length
+      const activeDrivers = driversData.filter(d => d.isActive).length
+      const activeVehicles = vehiclesData.filter(v => v.status === "active").length
 
-      const presentWorkers = workerAttendance.filter(w => w.isPresent).length
+      const completedTrips = tripsData.filter(t => t.status === "completed").length
+      const pendingTrips = tripsData.filter(t => t.status === "pending").length
+
+      const presentWorkers = attendanceData.filter(w => w.isPresent).length
 
       return {
-        totalDrivers: drivers.length,
+        totalDrivers: driversData.length,
         activeDrivers,
-        totalVehicles: vehicles.length,
+        totalVehicles: vehiclesData.length,
         activeVehicles,
-        assignedFeederPoints: feederPointAssignments.length,
+        assignedFeederPoints: feederPointsData.length,
         todayTrips: {
-          total: todayTrips.length,
+          total: tripsData.length,
           completed: completedTrips,
           pending: pendingTrips,
         },
         todayAttendance: {
-          totalWorkers: workerAttendance.length,
+          totalWorkers: attendanceData.length,
           presentWorkers,
-          absentWorkers: workerAttendance.length - presentWorkers,
+          absentWorkers: attendanceData.length - presentWorkers,
         },
         pendingApprovals: 0, // TODO: Implement driver approval system
       }
@@ -177,29 +185,132 @@ export class ContractorService {
       return drivers
     } catch (error) {
       console.error("Error fetching contractor drivers:", error)
-      throw error
+      // Return empty array instead of throwing to prevent app crash
+      console.log("Returning empty drivers array to prevent crash")
+      return []
     }
   }
 
   // Get vehicles assigned to contractor
   static async getContractorVehicles(contractorId: string) {
     try {
-      const vehiclesRef = collection(FIRESTORE_DB, "vehicles")
-      const q = query(
-        vehiclesRef,
-        where("contractorId", "==", contractorId)
-      )
-      const querySnapshot = await getDocs(q)
+      console.log(`🚗 Fetching vehicles for contractor: ${contractorId}`)
 
+      // Get vehicle assignments for this contractor
+      const assignmentsRef = collection(FIRESTORE_DB, "vehicleAssignments")
+
+      let assignmentsSnapshot
+      try {
+        const assignmentsQuery = query(
+          assignmentsRef,
+          where("assignedTo", "==", contractorId),
+          where("status", "==", "active"),
+          where("assignmentType", "==", "admin_to_contractor")
+        )
+        assignmentsSnapshot = await getDocs(assignmentsQuery)
+        console.log(`📋 Found ${assignmentsSnapshot.size} vehicle assignments`)
+      } catch (queryError) {
+        console.warn("Vehicle assignments query failed, trying fallback:", queryError)
+        // Fallback: get all assignments and filter manually
+        const allAssignmentsSnapshot = await getDocs(assignmentsRef)
+        console.log(`📋 Total assignments in collection: ${allAssignmentsSnapshot.size}`)
+        const filteredDocs: any[] = []
+        allAssignmentsSnapshot.forEach((doc) => {
+          const data = doc.data()
+          console.log(`  Assignment: assignedTo=${data.assignedTo}, status=${data.status}, type=${data.assignmentType}`)
+          if (data.assignedTo === contractorId && data.status === "active" && data.assignmentType === "admin_to_contractor") {
+            filteredDocs.push(doc)
+          }
+        })
+        console.log(`📋 Filtered assignments: ${filteredDocs.length}`)
+        // Create a mock snapshot-like object
+        assignmentsSnapshot = {
+          forEach: (callback: any) => filteredDocs.forEach(callback),
+          size: filteredDocs.length
+        } as any
+      }
+
+      const vehicleIds: string[] = []
+      assignmentsSnapshot.forEach((doc) => {
+        const data = doc.data()
+        vehicleIds.push(data.vehicleId)
+      })
+
+      console.log(`🚗 Vehicle IDs found: ${vehicleIds.length}`, vehicleIds)
+
+      if (vehicleIds.length === 0) {
+        console.log("❌ No vehicle assignments found, checking for direct vehicle assignments...")
+
+        // Fallback: Check for vehicles directly assigned to contractor (legacy method)
+        try {
+          const vehiclesRef = collection(FIRESTORE_DB, "vehicles")
+          const directAssignmentQuery = query(
+            vehiclesRef,
+            where("assignedToContractor", "==", contractorId),
+            where("status", "==", "active")
+          )
+          const directVehiclesSnapshot = await getDocs(directAssignmentQuery)
+
+          if (directVehiclesSnapshot.size > 0) {
+            console.log(`📋 Found ${directVehiclesSnapshot.size} directly assigned vehicles`)
+            const directVehicles: any[] = []
+            directVehiclesSnapshot.forEach((doc) => {
+              const data = doc.data()
+              directVehicles.push({
+                id: doc.id,
+                ...data,
+                createdAt: data.createdAt || new Date(),
+                registrationDate: data.registrationDate || new Date(),
+                isActive: data.isActive !== undefined ? data.isActive : true,
+                status: data.status || "active"
+              })
+            })
+            return directVehicles
+          }
+        } catch (directError) {
+          console.warn("Direct vehicle assignment query failed:", directError)
+        }
+
+        console.log("❌ No vehicles found for contractor")
+        return []
+      }
+
+      // Get the actual vehicle details
+      const vehiclesRef = collection(FIRESTORE_DB, "vehicles")
       const vehicles: any[] = []
-      querySnapshot.forEach((doc) => {
-        vehicles.push({ id: doc.id, ...doc.data() })
+
+      // Fetch vehicles in batches (Firestore 'in' query limit is 10)
+      const batchSize = 10
+      for (let i = 0; i < vehicleIds.length; i += batchSize) {
+        const batch = vehicleIds.slice(i, i + batchSize)
+        const vehiclesQuery = query(vehiclesRef, where("__name__", "in", batch))
+        const vehiclesSnapshot = await getDocs(vehiclesQuery)
+
+        vehiclesSnapshot.forEach((doc) => {
+          const data = doc.data()
+          vehicles.push({
+            id: doc.id,
+            ...data,
+            // Ensure required fields have defaults
+            createdAt: data.createdAt || new Date(),
+            registrationDate: data.registrationDate || new Date(),
+            isActive: data.isActive !== undefined ? data.isActive : true,
+            status: data.status || "active"
+          })
+        })
+      }
+
+      console.log(`✅ Returning ${vehicles.length} vehicles for contractor ${contractorId}`)
+      vehicles.forEach((vehicle, index) => {
+        console.log(`  ${index + 1}. ${vehicle.vehicleNumber} (${vehicle.vehicleName || 'No name'}) - Status: ${vehicle.status}`)
       })
 
       return vehicles
     } catch (error) {
       console.error("Error fetching contractor vehicles:", error)
-      throw error
+      // Return empty array instead of throwing to prevent app crash
+      console.log("Returning empty vehicles array to prevent crash")
+      return []
     }
   }
 
@@ -207,15 +318,21 @@ export class ContractorService {
   static async getContractorFeederPoints(contractorId: string): Promise<FeederPoint[]> {
     try {
       const assignments = await FeederPointService.getAssignmentsByContractor(contractorId)
-      const feederPointIds = assignments.map(a => a.feederPointId)
+      // Use Set to ensure unique feeder point IDs
+      const uniqueFeederPointIds = [...new Set(assignments.map(a => a.feederPointId))]
 
-      if (feederPointIds.length === 0) return []
+      if (uniqueFeederPointIds.length === 0) return []
 
       const feederPoints: FeederPoint[] = []
-      for (const fpId of feederPointIds) {
+      const seenIds = new Set<string>()
+
+      for (const fpId of uniqueFeederPointIds) {
         try {
           const fp = await FeederPointService.getFeederPointById(fpId)
-          if (fp) feederPoints.push(fp)
+          if (fp && !seenIds.has(fp.id || fpId)) {
+            seenIds.add(fp.id || fpId)
+            feederPoints.push(fp)
+          }
         } catch (error) {
           console.error(`Error fetching feeder point ${fpId}:`, error)
         }
@@ -224,7 +341,9 @@ export class ContractorService {
       return feederPoints
     } catch (error) {
       console.error("Error fetching contractor feeder points:", error)
-      throw error
+      // Return empty array instead of throwing to prevent app crash
+      console.log("Returning empty feeder points array to prevent crash")
+      return []
     }
   }
 

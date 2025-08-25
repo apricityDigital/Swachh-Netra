@@ -183,24 +183,84 @@ export class FeederPointService {
 
   static async getAssignmentsByContractor(contractorId: string): Promise<FeederPointAssignment[]> {
     try {
+      console.log(`🔍 Fetching assignments for contractor: ${contractorId}`)
       const assignmentsRef = collection(FIRESTORE_DB, "feederPointAssignments")
-      const q = query(
-        assignmentsRef, 
-        where("contractorId", "==", contractorId),
-        where("status", "==", "active"),
-        orderBy("assignedAt", "desc")
-      )
-      const querySnapshot = await getDocs(q)
-      
+
+      // Try compound query first, fallback to simple query if it fails
+      let querySnapshot
+      try {
+        const q = query(
+          assignmentsRef,
+          where("contractorId", "==", contractorId),
+          where("status", "==", "active"),
+          orderBy("assignedAt", "desc")
+        )
+        querySnapshot = await getDocs(q)
+      } catch (indexError) {
+        console.warn("Compound query failed, using simple query:", indexError)
+        // Fallback to simple query without orderBy
+        const q = query(
+          assignmentsRef,
+          where("contractorId", "==", contractorId),
+          where("status", "==", "active")
+        )
+        querySnapshot = await getDocs(q)
+      }
+
       const assignments: FeederPointAssignment[] = []
       querySnapshot.forEach((doc) => {
-        assignments.push({ id: doc.id, ...doc.data() } as FeederPointAssignment)
+        const data = doc.data()
+        assignments.push({
+          id: doc.id,
+          ...data,
+          assignedAt: data.assignedAt || new Date(),
+          status: data.status || "active"
+        } as FeederPointAssignment)
       })
-      
+
+      console.log(`📋 Found ${assignments.length} assignments for contractor ${contractorId}`)
+      assignments.forEach((assignment, index) => {
+        console.log(`  ${index + 1}. Assignment ID: ${assignment.id}, FeederPoint ID: ${assignment.feederPointId}`)
+      })
+
+      // Sort manually if orderBy failed
+      assignments.sort((a, b) => {
+        const dateA = a.assignedAt instanceof Date ? a.assignedAt : new Date(a.assignedAt)
+        const dateB = b.assignedAt instanceof Date ? b.assignedAt : new Date(b.assignedAt)
+        return dateB.getTime() - dateA.getTime()
+      })
+
       return assignments
     } catch (error) {
       console.error("Error fetching contractor assignments:", error)
-      throw new Error("Failed to fetch contractor assignments")
+
+      // If even the simple query fails, try to get all assignments and filter manually
+      try {
+        console.log("Attempting to fetch all assignments and filter manually...")
+        const assignmentsRef = collection(FIRESTORE_DB, "feederPointAssignments")
+        const querySnapshot = await getDocs(assignmentsRef)
+
+        const assignments: FeederPointAssignment[] = []
+        querySnapshot.forEach((doc) => {
+          const data = doc.data()
+          // Filter manually for this contractor and active status
+          if (data.contractorId === contractorId && data.status === "active") {
+            assignments.push({
+              id: doc.id,
+              ...data,
+              assignedAt: data.assignedAt || new Date(),
+              status: data.status || "active"
+            } as FeederPointAssignment)
+          }
+        })
+
+        return assignments
+      } catch (fallbackError) {
+        console.error("Fallback query also failed:", fallbackError)
+        // Return empty array instead of throwing error to prevent app crash
+        console.log("Returning empty assignments array to prevent crash")
+        return []
+      }
     }
   }
 
