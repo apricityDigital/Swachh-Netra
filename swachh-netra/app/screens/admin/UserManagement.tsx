@@ -46,7 +46,7 @@ interface User {
 }
 
 interface ApprovalRequest {
-    id: string;
+    id?: string;
     fullName: string;
     email: string;
     phone: string;

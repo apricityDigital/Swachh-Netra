@@ -231,7 +231,7 @@ export class ContractorService {
       }
 
       const vehicleIds: string[] = []
-      assignmentsSnapshot.forEach((doc) => {
+      assignmentsSnapshot.forEach((doc: any) => {
         const data = doc.data()
         vehicleIds.push(data.vehicleId)
       })
@@ -446,9 +446,50 @@ export class ContractorService {
     feederPointIds: string[]
   ): Promise<void> {
     try {
+      console.log("🔄 [ContractorService] Starting vehicle assignment:", {
+        contractorId,
+        vehicleId,
+        driverId,
+        feederPointIds: feederPointIds.length
+      })
+
+      // Validate inputs
+      if (!contractorId || !vehicleId || !driverId || !feederPointIds.length) {
+        throw new Error("Missing required assignment parameters")
+      }
+
+      // Check if vehicle exists and is available
+      const vehicleDoc = await getDoc(doc(FIRESTORE_DB, "vehicles", vehicleId))
+      if (!vehicleDoc.exists()) {
+        throw new Error("Vehicle not found")
+      }
+
+      const vehicleData = vehicleDoc.data()
+      if (vehicleData.driverId && vehicleData.driverId !== driverId) {
+        throw new Error("Vehicle is already assigned to another driver")
+      }
+
+      // Check if driver exists
+      const driverDoc = await getDoc(doc(FIRESTORE_DB, "users", driverId))
+      if (!driverDoc.exists()) {
+        throw new Error("Driver not found")
+      }
+
       const batch = writeBatch(FIRESTORE_DB)
 
-      // Create driver assignment
+      // First, deactivate any existing assignments for this driver
+      const existingAssignmentsQuery = query(
+        collection(FIRESTORE_DB, "driverAssignments"),
+        where("driverId", "==", driverId),
+        where("status", "==", "active")
+      )
+      const existingAssignments = await getDocs(existingAssignmentsQuery)
+
+      existingAssignments.forEach((doc) => {
+        batch.update(doc.ref, { status: "inactive", updatedAt: serverTimestamp() })
+      })
+
+      // Create new driver assignment
       const driverAssignmentRef = doc(collection(FIRESTORE_DB, "driverAssignments"))
       const driverAssignment = {
         driverId,
@@ -475,13 +516,16 @@ export class ContractorService {
       batch.update(driverRef, {
         assignedVehicleId: vehicleId,
         assignedFeederPointIds: feederPointIds,
+        contractorId: contractorId,
         updatedAt: serverTimestamp(),
       })
 
       await batch.commit()
+      console.log("✅ [ContractorService] Vehicle assignment completed successfully")
+
     } catch (error) {
-      console.error("Error assigning vehicle to driver:", error)
-      throw new Error("Failed to assign vehicle to driver")
+      console.error("❌ [ContractorService] Error assigning vehicle to driver:", error)
+      throw new Error(`Failed to assign vehicle to driver: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 

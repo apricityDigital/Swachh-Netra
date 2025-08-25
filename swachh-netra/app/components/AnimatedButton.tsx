@@ -70,7 +70,7 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
     if (disabled || loading) return
 
     if (animationType === "scale" || animationType === "both") {
-      animateButtonPress(scaleAnim, onPress)
+      animateButtonPress(scaleAnim, () => onPress && onPress({} as any))
     } else if (animationType === "opacity") {
       Animated.sequence([
         Animated.timing(opacityAnim, {
@@ -83,9 +83,9 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
           duration: ANIMATION_DURATION.fast,
           useNativeDriver: true,
         }),
-      ]).start(() => onPress && onPress())
+      ]).start(() => onPress && onPress({} as any))
     } else {
-      onPress && onPress()
+      onPress && onPress({} as any)
     }
   }
 
@@ -267,7 +267,7 @@ export const AnimatedIconButton: React.FC<AnimatedIconButtonProps> = ({
     <AnimatedButton
       {...props}
       size={size}
-      style={[getIconButtonStyle(), props.style]}
+      style={[getIconButtonStyle(), props.style] as any}
     >
       {icon}
     </AnimatedButton>
@@ -316,7 +316,7 @@ export const AnimatedFAB: React.FC<AnimatedFABProps> = ({
           shadowRadius: 8,
         },
         style,
-      ]}
+      ] as any}
     >
       {icon}
     </AnimatedButton>

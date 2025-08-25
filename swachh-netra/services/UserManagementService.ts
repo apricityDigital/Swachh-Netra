@@ -1,17 +1,16 @@
-// Simplified service without Firebase dependencies for now
-// import {
-//   collection,
-//   doc,
-//   getDocs,
-//   getDoc,
-//   updateDoc,
-//   deleteDoc,
-//   query,
-//   where,
-//   orderBy,
-//   Timestamp
-// } from "firebase/firestore"
-// import { FIREBASE_DB } from "../FirebaseConfig"
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy,
+  Timestamp
+} from "firebase/firestore"
+import { FIRESTORE_DB } from "../FirebaseConfig"
 
 export interface User {
   id: string
@@ -164,7 +163,7 @@ class UserManagementService {
   async getUsersByRole(role: string): Promise<User[]> {
     try {
       const q = query(
-        this.usersCollection,
+        collection(FIRESTORE_DB, "users"),
         where("role", "==", role),
         orderBy("createdAt", "desc")
       )
@@ -281,7 +280,7 @@ class UserManagementService {
    */
   async permanentDeleteUser(userId: string): Promise<void> {
     try {
-      const userRef = doc(this.usersCollection, userId)
+      const userRef = doc(FIRESTORE_DB, "users", userId)
       await deleteDoc(userRef)
     } catch (error) {
       console.error("Error permanently deleting user:", error)

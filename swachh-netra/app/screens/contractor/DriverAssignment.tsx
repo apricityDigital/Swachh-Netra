@@ -15,6 +15,8 @@ import { MaterialIcons } from "@expo/vector-icons"
 import { ContractorService } from "../../../services/ContractorService"
 import { FeederPointService, FeederPoint } from "../../../services/FeederPointService"
 import FirebaseService from "../../../services/FirebaseService"
+import { doc, getDoc } from "firebase/firestore"
+import { FIRESTORE_DB } from "../../../FirebaseConfig"
 
 interface Driver {
   id: string
@@ -38,6 +40,8 @@ interface Vehicle {
 const DriverAssignment = ({ route, navigation }: any) => {
   const { contractorId } = route.params || {}
 
+  console.log("🔄 [DriverAssignment] Component initialized with contractorId:", contractorId)
+
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [drivers, setDrivers] = useState<Driver[]>([])
@@ -50,6 +54,13 @@ const DriverAssignment = ({ route, navigation }: any) => {
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null)
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null)
   const [selectedFeederPoints, setSelectedFeederPoints] = useState<string[]>([])
+
+  // Team Planning states - Simple 3-step flow
+  const [viewMode, setViewMode] = useState<'individual' | 'planning'>('individual')
+  const [planningStep, setPlanningStep] = useState<'routes' | 'vehicles' | 'drivers'>('routes')
+  const [selectedRoutes, setSelectedRoutes] = useState<string[]>([])
+  const [selectedVehiclesForTeam, setSelectedVehiclesForTeam] = useState<string[]>([])
+  const [teamPlanModalVisible, setTeamPlanModalVisible] = useState(false)
 
   useEffect(() => {
     if (contractorId) {
@@ -126,25 +137,91 @@ const DriverAssignment = ({ route, navigation }: any) => {
     )
   }
 
+  // Simple Team Planning functions
+  const startTeamPlanning = () => {
+    setViewMode('planning')
+    setPlanningStep('routes')
+    setSelectedRoutes([])
+    setSelectedVehiclesForTeam([])
+    setTeamPlanModalVisible(true)
+  }
+
+  const handleRouteSelection = (routeId: string) => {
+    setSelectedRoutes(prev =>
+      prev.includes(routeId)
+        ? prev.filter(id => id !== routeId)
+        : [...prev, routeId]
+    )
+  }
+
+  const handleVehicleSelectionForTeam = (vehicleId: string) => {
+    setSelectedVehiclesForTeam(prev =>
+      prev.includes(vehicleId)
+        ? prev.filter(id => id !== vehicleId)
+        : [...prev, vehicleId]
+    )
+  }
+
+  const goToNextStep = () => {
+    if (planningStep === 'routes' && selectedRoutes.length > 0) {
+      setPlanningStep('vehicles')
+    } else if (planningStep === 'vehicles' && selectedVehiclesForTeam.length > 0) {
+      setPlanningStep('drivers')
+    }
+  }
+
+  const goToPreviousStep = () => {
+    if (planningStep === 'vehicles') {
+      setPlanningStep('routes')
+    } else if (planningStep === 'drivers') {
+      setPlanningStep('vehicles')
+    }
+  }
+
   const confirmAssignment = async () => {
+    console.log("🔄 [DriverAssignment] confirmAssignment called with:", {
+      selectedDriver: selectedDriver?.id,
+      selectedVehicle: selectedVehicle?.id,
+      selectedFeederPoints: selectedFeederPoints.length,
+      contractorId
+    })
+
     if (!selectedDriver || !selectedVehicle || selectedFeederPoints.length === 0) {
+      console.log("❌ [DriverAssignment] Incomplete assignment:", {
+        hasDriver: !!selectedDriver,
+        hasVehicle: !!selectedVehicle,
+        feederPointsCount: selectedFeederPoints.length
+      })
       Alert.alert("Incomplete Assignment", "Please select a vehicle and at least one feeder point")
       return
     }
 
     if (!selectedDriver.id || !selectedVehicle.id) {
+      console.log("❌ [DriverAssignment] Invalid selection - missing IDs")
       Alert.alert("Invalid Selection", "Selected driver or vehicle is missing required information")
       return
     }
 
     try {
       setLoading(true)
-      console.log("🔄 [DriverAssignment] Assigning vehicle to driver:", {
+      console.log("🔄 [DriverAssignment] Starting assignment process:", {
         contractorId,
         vehicleId: selectedVehicle.id,
         driverId: selectedDriver.id,
-        feederPoints: selectedFeederPoints.length
+        feederPointIds: selectedFeederPoints,
+        feederPointsCount: selectedFeederPoints.length
       })
+
+      // First, check if driver is already assigned to this contractor
+      const driverDoc = await getDoc(doc(FIRESTORE_DB, "users", selectedDriver.id))
+      if (driverDoc.exists()) {
+        const driverData = driverDoc.data()
+        console.log("👤 [DriverAssignment] Current driver data:", {
+          contractorId: driverData.contractorId,
+          assignedVehicleId: driverData.assignedVehicleId,
+          assignedFeederPointIds: driverData.assignedFeederPointIds
+        })
+      }
 
       await ContractorService.assignVehicleToDriver(
         contractorId,
@@ -153,12 +230,73 @@ const DriverAssignment = ({ route, navigation }: any) => {
         selectedFeederPoints
       )
 
-      Alert.alert("Success", "Driver assignment completed successfully")
-      setAssignModalVisible(false)
-      fetchData()
+      console.log("✅ [DriverAssignment] Assignment completed successfully")
+
+      // Verify the assignment was saved
+      console.log("🔍 [DriverAssignment] Verifying assignment was saved...")
+      setTimeout(async () => {
+        try {
+          const driverDoc = await getDoc(doc(FIRESTORE_DB, "users", selectedDriver.id))
+          if (driverDoc.exists()) {
+            const driverData = driverDoc.data()
+            console.log("📋 [DriverAssignment] Driver data after assignment:", {
+              assignedVehicleId: driverData.assignedVehicleId,
+              assignedFeederPointIds: driverData.assignedFeederPointIds,
+              contractorId: driverData.contractorId
+            })
+          }
+        } catch (error) {
+          console.error("❌ [DriverAssignment] Error verifying assignment:", error)
+        }
+      }, 2000)
+      Alert.alert("Success", "Driver assignment completed successfully", [
+        {
+          text: "OK",
+          onPress: () => {
+            setAssignModalVisible(false)
+            setSelectedDriver(null)
+            setSelectedVehicle(null)
+            setSelectedFeederPoints([])
+            fetchData()
+          }
+        }
+      ])
     } catch (error) {
       console.error("❌ [DriverAssignment] Error assigning driver:", error)
-      Alert.alert("Error", "Failed to assign driver. Please try again.")
+      Alert.alert("Error", `Failed to assign driver: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleBulkAssignment = async (assignments: Array<{driverId: string, vehicleId: string, feederPointIds: string[]}>) => {
+    try {
+      setLoading(true)
+      console.log("🔄 [DriverAssignment] Starting bulk assignment:", assignments.length, "assignments")
+
+      for (const assignment of assignments) {
+        await ContractorService.assignVehicleToDriver(
+          contractorId,
+          assignment.vehicleId,
+          assignment.driverId,
+          assignment.feederPointIds
+        )
+        console.log("✅ [DriverAssignment] Assigned driver:", assignment.driverId)
+      }
+
+      Alert.alert("Success", `Successfully assigned ${assignments.length} drivers`, [
+        {
+          text: "OK",
+          onPress: () => {
+            setBulkAssignModalVisible(false)
+            setSelectedDrivers([])
+            fetchData()
+          }
+        }
+      ])
+    } catch (error) {
+      console.error("❌ [DriverAssignment] Error in bulk assignment:", error)
+      Alert.alert("Error", "Failed to complete bulk assignment")
     } finally {
       setLoading(false)
     }
@@ -265,6 +403,19 @@ const DriverAssignment = ({ route, navigation }: any) => {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
+        {/* Simple Action Header */}
+        <View style={styles.actionHeader}>
+          <Text style={styles.pageTitle}>Driver Assignment</Text>
+          <Button
+            mode="contained"
+            onPress={startTeamPlanning}
+            style={styles.teamPlanButton}
+            icon="route"
+          >
+            Plan Team Routes
+          </Button>
+        </View>
+
         {/* Search */}
         <View style={styles.searchContainer}>
           <Searchbar
@@ -294,6 +445,8 @@ const DriverAssignment = ({ route, navigation }: any) => {
             <Text style={styles.statLabel}>Feeder Points</Text>
           </View>
         </View>
+
+
 
         {/* Drivers List */}
         <View style={styles.section}>
@@ -392,13 +545,183 @@ const DriverAssignment = ({ route, navigation }: any) => {
                 </Button>
                 <Button
                   mode="contained"
-                  onPress={confirmAssignment}
+                  onPress={() => {
+                    console.log("🔘 [DriverAssignment] Assign button pressed:", {
+                      hasVehicle: !!selectedVehicle,
+                      vehicleId: selectedVehicle?.id,
+                      feederPointsCount: selectedFeederPoints.length,
+                      feederPointIds: selectedFeederPoints,
+                      loading
+                    })
+                    confirmAssignment()
+                  }}
                   style={styles.modalButton}
                   loading={loading}
-                  disabled={!selectedVehicle || selectedFeederPoints.length === 0}
+                  disabled={!selectedVehicle || selectedFeederPoints.length === 0 || loading}
                 >
-                  Assign
+                  {loading ? "Assigning..." : "Assign"}
                 </Button>
+              </View>
+            </View>
+          </ScrollView>
+        </Modal>
+
+        {/* Simple Team Planning Modal */}
+        <Modal
+          visible={teamPlanModalVisible}
+          onDismiss={() => setTeamPlanModalVisible(false)}
+          contentContainerStyle={styles.modalContainer}
+        >
+          <ScrollView style={styles.modalScrollView}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <MaterialIcons name="route" size={24} color="#2563eb" />
+                <Text style={styles.modalTitle}>Plan Team Routes</Text>
+              </View>
+
+              {/* Step Indicator */}
+              <View style={styles.stepIndicator}>
+                <View style={[styles.step, planningStep === 'routes' && styles.activeStep]}>
+                  <Text style={[styles.stepNumber, planningStep === 'routes' && styles.activeStepText]}>1</Text>
+                  <Text style={[styles.stepLabel, planningStep === 'routes' && styles.activeStepText]}>Routes</Text>
+                </View>
+                <View style={styles.stepConnector} />
+                <View style={[styles.step, planningStep === 'vehicles' && styles.activeStep]}>
+                  <Text style={[styles.stepNumber, planningStep === 'vehicles' && styles.activeStepText]}>2</Text>
+                  <Text style={[styles.stepLabel, planningStep === 'vehicles' && styles.activeStepText]}>Vehicles</Text>
+                </View>
+                <View style={styles.stepConnector} />
+                <View style={[styles.step, planningStep === 'drivers' && styles.activeStep]}>
+                  <Text style={[styles.stepNumber, planningStep === 'drivers' && styles.activeStepText]}>3</Text>
+                  <Text style={[styles.stepLabel, planningStep === 'drivers' && styles.activeStepText]}>Drivers</Text>
+                </View>
+              </View>
+
+              {/* Step 1: Select Routes */}
+              {planningStep === 'routes' && (
+                <View style={styles.stepContent}>
+                  <Text style={styles.stepTitle}>Select Feeder Points (Routes)</Text>
+                  <Text style={styles.stepDescription}>Choose the routes that need to be covered</Text>
+
+                  {feederPoints.map((point) => (
+                    <TouchableOpacity
+                      key={point.id}
+                      style={[
+                        styles.selectionItem,
+                        selectedRoutes.includes(point.id!) && styles.selectedItem
+                      ]}
+                      onPress={() => handleRouteSelection(point.id!)}
+                    >
+                      <View style={styles.feederPointInfo}>
+                        <Text style={styles.feederPointName}>{point.feederPointName}</Text>
+                        <Text style={styles.feederPointArea}>{point.areaName}</Text>
+                      </View>
+                      {selectedRoutes.includes(point.id!) && (
+                        <MaterialIcons name="check-circle" size={24} color="#059669" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Step 2: Select Vehicles */}
+              {planningStep === 'vehicles' && (
+                <View style={styles.stepContent}>
+                  <Text style={styles.stepTitle}>Select Vehicles</Text>
+                  <Text style={styles.stepDescription}>Choose vehicles for the selected routes</Text>
+
+                  {vehicles.filter(v => !v.driverId).map((vehicle) => (
+                    <TouchableOpacity
+                      key={vehicle.id}
+                      style={[
+                        styles.selectionItem,
+                        selectedVehiclesForTeam.includes(vehicle.id) && styles.selectedItem
+                      ]}
+                      onPress={() => handleVehicleSelectionForTeam(vehicle.id)}
+                    >
+                      <View style={styles.vehicleInfo}>
+                        <Text style={styles.vehicleNumber}>{vehicle.vehicleNumber}</Text>
+                        <Text style={styles.vehicleType}>{vehicle.type} - {vehicle.capacity}kg</Text>
+                      </View>
+                      {selectedVehiclesForTeam.includes(vehicle.id) && (
+                        <MaterialIcons name="check-circle" size={24} color="#059669" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Step 3: Assign Drivers */}
+              {planningStep === 'drivers' && (
+                <View style={styles.stepContent}>
+                  <Text style={styles.stepTitle}>Assign Drivers</Text>
+                  <Text style={styles.stepDescription}>
+                    Routes: {selectedRoutes.length} | Vehicles: {selectedVehiclesForTeam.length}
+                  </Text>
+
+                  <View style={styles.assignmentSummary}>
+                    <Text style={styles.summaryText}>
+                      Ready to assign {Math.min(selectedRoutes.length, selectedVehiclesForTeam.length)} teams
+                    </Text>
+                  </View>
+
+                  <Button
+                    mode="contained"
+                    onPress={() => {
+                      // Create assignments
+                      const availableDrivers = drivers.filter(d => !d.assignedVehicleId)
+                      const numTeams = Math.min(selectedRoutes.length, selectedVehiclesForTeam.length, availableDrivers.length)
+
+                      const assignments = []
+                      for (let i = 0; i < numTeams; i++) {
+                        assignments.push({
+                          driverId: availableDrivers[i].id,
+                          vehicleId: selectedVehiclesForTeam[i],
+                          feederPointIds: [selectedRoutes[i]]
+                        })
+                      }
+
+                      if (assignments.length > 0) {
+                        handleBulkAssignment(assignments)
+                      }
+                    }}
+                    style={styles.createTeamsButton}
+                    disabled={selectedRoutes.length === 0 || selectedVehiclesForTeam.length === 0}
+                  >
+                    Create {Math.min(selectedRoutes.length, selectedVehiclesForTeam.length)} Teams
+                  </Button>
+                </View>
+              )}
+
+              {/* Navigation Buttons */}
+              <View style={styles.modalActions}>
+                <Button
+                  mode="outlined"
+                  onPress={() => {
+                    if (planningStep === 'routes') {
+                      setTeamPlanModalVisible(false)
+                    } else {
+                      goToPreviousStep()
+                    }
+                  }}
+                  style={styles.modalButton}
+                >
+                  {planningStep === 'routes' ? 'Cancel' : 'Previous'}
+                </Button>
+
+                {planningStep !== 'drivers' && (
+                  <Button
+                    mode="contained"
+                    onPress={goToNextStep}
+                    style={styles.modalButton}
+                    disabled={
+                      (planningStep === 'routes' && selectedRoutes.length === 0) ||
+                      (planningStep === 'vehicles' && selectedVehiclesForTeam.length === 0)
+                    }
+                  >
+                    Next
+                  </Button>
+                )}
               </View>
             </View>
           </ScrollView>
@@ -671,6 +994,95 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     marginHorizontal: 8,
+  },
+  // Simple Team Planning styles
+  actionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  teamPlanButton: {
+    backgroundColor: '#2563eb',
+  },
+  stepIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 20,
+  },
+  step: {
+    alignItems: 'center',
+    padding: 8,
+  },
+  activeStep: {
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+  },
+  stepNumber: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#e5e7eb',
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 32,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  activeStepText: {
+    backgroundColor: '#2563eb',
+    color: '#fff',
+  },
+  stepLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  stepConnector: {
+    width: 40,
+    height: 2,
+    backgroundColor: '#e5e7eb',
+    marginHorizontal: 8,
+  },
+  stepContent: {
+    marginVertical: 16,
+  },
+  stepTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  stepDescription: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 16,
+  },
+  assignmentSummary: {
+    backgroundColor: '#f0fdf4',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  summaryText: {
+    fontSize: 16,
+    color: '#059669',
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  createTeamsButton: {
+    backgroundColor: '#059669',
   },
 })
 

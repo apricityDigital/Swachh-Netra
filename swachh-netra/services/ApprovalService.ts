@@ -186,7 +186,7 @@ export class ApprovalService {
             return querySnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
-            })) as User[];
+            } as unknown as User));
         } catch (error) {
             console.error('❌ Error fetching users:', error);
             throw error;
@@ -206,7 +206,7 @@ export class ApprovalService {
             return querySnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
-            })) as User[];
+            } as unknown as User));
         } catch (error) {
             console.error('❌ Error fetching users by role:', error);
             throw error;
@@ -226,7 +226,7 @@ export class ApprovalService {
             return querySnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
-            })) as User[];
+            } as unknown as User));
         } catch (error) {
             console.error('❌ Error fetching drivers by contractor:', error);
             throw error;

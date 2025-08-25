@@ -215,12 +215,14 @@ class FirebaseService {
 
   async getAllUsers(role?: string): Promise<UserData[]> {
     try {
-      let q = collection(FIRESTORE_DB, 'users');
+      let querySnapshot;
       if (role) {
-        q = query(collection(FIRESTORE_DB, 'users'), where('role', '==', role));
+        const q = query(collection(FIRESTORE_DB, 'users'), where('role', '==', role));
+        querySnapshot = await getDocs(q);
+      } else {
+        querySnapshot = await getDocs(collection(FIRESTORE_DB, 'users'));
       }
-      const querySnapshot = await getDocs(q);
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserData));
+      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as unknown as UserData));
     } catch (error) {
       console.error('Get all users error:', error);
       throw error;
