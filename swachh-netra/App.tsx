@@ -20,6 +20,8 @@ import DriverApprovals from './app/screens/contractor/DriverApprovals';
 import DriverAssignment from './app/screens/contractor/DriverAssignment';
 import ContractorFeederPoints from './app/screens/contractor/ContractorFeederPoints';
 import DriverDashboard from './app/screens/driver/DriverDashboard';
+import WorkerAttendance from './app/screens/driver/WorkerAttendance';
+import TripRecording from './app/screens/driver/TripRecording';
 import SwachhHRDashboard from './app/screens/swachh_hr/SwachhHRDashboard';
 import WorkerManagement from './app/screens/swachh_hr/WorkerManagement';
 import WorkerApprovals from './app/screens/admin/WorkerApprovals';
@@ -53,6 +55,8 @@ export default function App() {
             <Stack.Screen name='DriverAssignment' component={DriverAssignment} options={{ headerShown: false }} />
             <Stack.Screen name='ContractorFeederPoints' component={ContractorFeederPoints} options={{ headerShown: false }} />
             <Stack.Screen name='DriverDashboard' component={DriverDashboard} options={{ headerShown: false }} />
+            <Stack.Screen name='WorkerAttendance' component={WorkerAttendance} options={{ headerShown: false }} />
+            <Stack.Screen name='TripRecording' component={TripRecording} options={{ headerShown: false }} />
             <Stack.Screen name='SwachhHRDashboard' component={SwachhHRDashboard} options={{ headerShown: false }} />
             <Stack.Screen name='WorkerManagement' component={WorkerManagement} options={{ headerShown: false }} />
             <Stack.Screen name='WorkerApprovals' component={WorkerApprovals} options={{ headerShown: false }} />

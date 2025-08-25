@@ -11,25 +11,128 @@ import {
   Dimensions,
   Alert,
 } from "react-native"
-import { Card, Text } from "react-native-paper"
+import { Card, Text, Button, Chip, Avatar } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
 import { signOut } from "firebase/auth"
 import { FIREBASE_AUTH } from "../../../FirebaseConfig"
+import ProtectedRoute from "../../components/ProtectedRoute"
+import { useRequireAuth } from "../../hooks/useRequireAuth"
+import { DriverService, DriverDashboardData } from "../../../services/DriverService"
 
 const { width } = Dimensions.get("window")
 
+// Enhanced interfaces for driver dashboard
+interface AssignedVehicle {
+  id: string
+  vehicleNumber: string
+  type: string
+  capacity: number
+  status: string
+  fuelLevel?: number
+  contractorName?: string
+}
+
+interface AssignedFeederPoint {
+  id: string
+  feederPointName: string
+  areaName: string
+  wardNumber: string
+  nearestLandmark: string
+  approximateHouseholds: string
+  completedTrips: number
+  totalTrips: number
+  nextTripTime?: string
+}
+
+interface TodayStats {
+  totalTrips: number
+  completedTrips: number
+  pendingTrips: number
+  totalWasteCollected: number
+  workersPresent: number
+  totalWorkers: number
+  shiftStartTime?: string
+  estimatedEndTime?: string
+}
+
 const DriverDashboard = ({ navigation }: any) => {
+  const { userData } = useRequireAuth(navigation)
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [driverStats, setDriverStats] = useState({
-    todayTrips: 0,
-    completedPickups: 8,
-    pendingPickups: 4,
-    totalDistance: 45.2,
-    wasteCollected: 120,
-    currentStatus: "Available",
+  const [dashboardData, setDashboardData] = useState<DriverDashboardData | null>(null)
+  const [assignedVehicle, setAssignedVehicle] = useState<AssignedVehicle | null>(null)
+  const [assignedFeederPoints, setAssignedFeederPoints] = useState<AssignedFeederPoint[]>([])
+  const [todayStats, setTodayStats] = useState<TodayStats>({
+    totalTrips: 0,
+    completedTrips: 0,
+    pendingTrips: 0,
+    totalWasteCollected: 0,
+    workersPresent: 0,
+    totalWorkers: 0
   })
-  const [userName, setUserName] = useState("Driver")
+
+  useEffect(() => {
+    if (userData?.uid) {
+      fetchDashboardData()
+      setupRealTimeListeners()
+    }
+  }, [userData])
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true)
+      console.log("🚛 [DriverDashboard] Fetching dashboard data for driver:", userData?.uid)
+
+      const data = await DriverService.getDriverDashboardData(userData?.uid || '')
+      setDashboardData(data)
+
+      // Set individual state items for easier access
+      setAssignedVehicle(data.assignedVehicle)
+      setAssignedFeederPoints(data.assignedFeederPoints)
+      setTodayStats({
+        totalTrips: data.todayTrips.total,
+        completedTrips: data.todayTrips.completed,
+        pendingTrips: data.todayTrips.pending,
+        totalWasteCollected: data.todayTrips.totalWasteCollected,
+        workersPresent: data.assignedWorkers.present,
+        totalWorkers: data.assignedWorkers.total
+      })
+
+      console.log("✅ [DriverDashboard] Dashboard data loaded successfully")
+    } catch (error) {
+      console.error("❌ [DriverDashboard] Error fetching dashboard data:", error)
+      Alert.alert("Error", "Failed to load dashboard data. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const setupRealTimeListeners = () => {
+    if (!userData?.uid) return
+
+    console.log("🔄 [DriverDashboard] Setting up real-time listeners")
+
+    // Listen to driver assignment changes
+    const unsubscribe = DriverService.subscribeToDriverData(
+      userData.uid,
+      (data: DriverDashboardData) => {
+        console.log("📡 [DriverDashboard] Real-time update received")
+        setDashboardData(data)
+        setAssignedVehicle(data.assignedVehicle)
+        setAssignedFeederPoints(data.assignedFeederPoints)
+        setTodayStats({
+          totalTrips: data.todayTrips.total,
+          completedTrips: data.todayTrips.completed,
+          pendingTrips: data.todayTrips.pending,
+          totalWasteCollected: data.todayTrips.totalWasteCollected,
+          workersPresent: data.assignedWorkers.present,
+          totalWorkers: data.assignedWorkers.total
+        })
+      }
+    )
+
+    return unsubscribe
+  }
 
   const driverActions = [
     {
@@ -39,6 +142,14 @@ const DriverDashboard = ({ navigation }: any) => {
       color: "#10b981",
       bgColor: "#f0fdf4",
       action: "startTrip",
+    },
+    {
+      title: "Worker Attendance",
+      description: "Mark worker attendance with photos",
+      icon: "people",
+      color: "#3b82f6",
+      bgColor: "#eff6ff",
+      action: "attendance",
     },
     {
       title: "Report Issue",
@@ -65,34 +176,6 @@ const DriverDashboard = ({ navigation }: any) => {
       action: "viewHistory",
     },
   ]
-
-  useEffect(() => {
-    fetchDashboardData()
-  }, [])
-
-  const fetchDashboardData = async () => {
-    setLoading(true)
-    try {
-      const user = FIREBASE_AUTH.currentUser
-      if (user) {
-        // TODO: Fetch real driver data from Firebase
-        // For now using mock data
-        setDriverStats({
-          todayTrips: 3,
-          completedPickups: 8,
-          pendingPickups: 4,
-          totalDistance: 45.2,
-          wasteCollected: 120,
-          currentStatus: "Available",
-        })
-        setUserName("John Doe") // TODO: Get from user profile
-      }
-    } catch (error) {
-      console.log("Error fetching dashboard data:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true)
@@ -121,13 +204,16 @@ const DriverDashboard = ({ navigation }: any) => {
   const handleAction = (action: string) => {
     switch (action) {
       case "startTrip":
-        Alert.alert("Start Trip", "Trip functionality will be implemented soon")
+        handleStartTrip()
+        break
+      case "attendance":
+        handleWorkerAttendance()
         break
       case "reportIssue":
         Alert.alert("Report Issue", "Issue reporting will be implemented soon")
         break
       case "viewRoute":
-        Alert.alert("View Route", "Route viewing will be implemented soon")
+        handleViewRoute()
         break
       case "viewHistory":
         Alert.alert("Collection Log", "History viewing will be implemented soon")
@@ -135,6 +221,43 @@ const DriverDashboard = ({ navigation }: any) => {
       default:
         break
     }
+  }
+
+  const handleStartTrip = () => {
+    if (!assignedVehicle) {
+      Alert.alert("No Vehicle Assigned", "Please contact your contractor to assign a vehicle.")
+      return
+    }
+
+    if (assignedFeederPoints.length === 0) {
+      Alert.alert("No Routes Assigned", "Please contact your contractor to assign collection routes.")
+      return
+    }
+
+    navigation.navigate('TripRecording', {
+      vehicleId: assignedVehicle.id,
+      feederPoints: assignedFeederPoints,
+      driverId: userData?.uid
+    })
+  }
+
+  const handleViewRoute = () => {
+    if (assignedFeederPoints.length === 0) {
+      Alert.alert("No Routes Assigned", "Please contact your contractor to assign collection routes.")
+      return
+    }
+
+    navigation.navigate('RouteMap', {
+      feederPoints: assignedFeederPoints,
+      vehicleId: assignedVehicle?.id
+    })
+  }
+
+  const handleWorkerAttendance = () => {
+    navigation.navigate('WorkerAttendance', {
+      driverId: userData?.uid,
+      vehicleId: assignedVehicle?.id
+    })
   }
 
   if (loading) {
@@ -149,7 +272,7 @@ const DriverDashboard = ({ navigation }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
@@ -159,7 +282,7 @@ const DriverDashboard = ({ navigation }: any) => {
             </View>
             <View style={styles.headerText}>
               <Text style={styles.welcomeText}>Welcome back,</Text>
-              <Text style={styles.userName}>{userName}</Text>
+              <Text style={styles.userName}>{userData?.fullName || "Driver"}</Text>
               <Text style={styles.roleText}>Driver</Text>
             </View>
           </View>
@@ -184,7 +307,7 @@ const DriverDashboard = ({ navigation }: any) => {
                   <MaterialIcons name="route" size={24} color="#3b82f6" />
                 </View>
                 <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{driverStats.todayTrips}</Text>
+                  <Text style={styles.statNumber}>{todayStats.completedTrips}/{todayStats.totalTrips}</Text>
                   <Text style={styles.statLabel}>Trips</Text>
                 </View>
               </View>
@@ -193,11 +316,11 @@ const DriverDashboard = ({ navigation }: any) => {
             <Card style={styles.statCard}>
               <View style={styles.statContent}>
                 <View style={[styles.statIcon, { backgroundColor: '#f0fdf4' }]}>
-                  <MaterialIcons name="check-circle" size={24} color="#10b981" />
+                  <MaterialIcons name="scale" size={24} color="#10b981" />
                 </View>
                 <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{driverStats.completedPickups}</Text>
-                  <Text style={styles.statLabel}>Completed</Text>
+                  <Text style={styles.statNumber}>{todayStats.totalWasteCollected}kg</Text>
+                  <Text style={styles.statLabel}>Waste Collected</Text>
                 </View>
               </View>
             </Card>
@@ -205,11 +328,11 @@ const DriverDashboard = ({ navigation }: any) => {
             <Card style={styles.statCard}>
               <View style={styles.statContent}>
                 <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
-                  <MaterialIcons name="navigation" size={24} color="#f59e0b" />
+                  <MaterialIcons name="people" size={24} color="#f59e0b" />
                 </View>
                 <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{driverStats.totalDistance}</Text>
-                  <Text style={styles.statLabel}>KM</Text>
+                  <Text style={styles.statNumber}>{todayStats.workersPresent}/{todayStats.totalWorkers}</Text>
+                  <Text style={styles.statLabel}>Workers</Text>
                 </View>
               </View>
             </Card>
@@ -217,15 +340,102 @@ const DriverDashboard = ({ navigation }: any) => {
             <Card style={styles.statCard}>
               <View style={styles.statContent}>
                 <View style={[styles.statIcon, { backgroundColor: '#faf5ff' }]}>
-                  <MaterialIcons name="delete" size={24} color="#8b5cf6" />
+                  <MaterialIcons name="pending" size={24} color="#8b5cf6" />
                 </View>
                 <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{driverStats.wasteCollected}</Text>
-                  <Text style={styles.statLabel}>KG</Text>
+                  <Text style={styles.statNumber}>{todayStats.pendingTrips}</Text>
+                  <Text style={styles.statLabel}>Pending</Text>
                 </View>
               </View>
             </Card>
           </View>
+        </View>
+
+        {/* Assigned Vehicle */}
+        {assignedVehicle ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Assigned Vehicle</Text>
+            <Card style={styles.vehicleCard}>
+              <View style={styles.vehicleContent}>
+                <View style={styles.vehicleHeader}>
+                  <MaterialIcons name="local-shipping" size={24} color="#3b82f6" />
+                  <Text style={styles.vehicleNumber}>{assignedVehicle.vehicleNumber}</Text>
+                  <Chip
+                    mode="outlined"
+                    style={[styles.statusChip, {
+                      backgroundColor: assignedVehicle.status === 'active' ? '#dcfce7' : '#fef3c7'
+                    }]}
+                  >
+                    {assignedVehicle.status}
+                  </Chip>
+                </View>
+                <View style={styles.vehicleDetails}>
+                  <Text style={styles.vehicleType}>{assignedVehicle.type} • {assignedVehicle.capacity}kg capacity</Text>
+                  {assignedVehicle.contractorName && (
+                    <Text style={styles.contractorName}>Contractor: {assignedVehicle.contractorName}</Text>
+                  )}
+                </View>
+                {assignedVehicle.fuelLevel && (
+                  <View style={styles.fuelInfo}>
+                    <MaterialIcons name="local-gas-station" size={20} color="#6b7280" />
+                    <Text style={styles.fuelLevel}>Fuel: {assignedVehicle.fuelLevel}%</Text>
+                  </View>
+                )}
+              </View>
+            </Card>
+          </View>
+        ) : (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Vehicle Assignment</Text>
+            <Card style={styles.noAssignmentCard}>
+              <MaterialIcons name="warning" size={48} color="#f59e0b" />
+              <Text style={styles.noAssignmentTitle}>No Vehicle Assigned</Text>
+              <Text style={styles.noAssignmentText}>
+                Please contact your contractor to get a vehicle assignment.
+              </Text>
+            </Card>
+          </View>
+        )}
+
+        {/* Assigned Feeder Points */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Today's Routes ({assignedFeederPoints.length} locations)</Text>
+          {assignedFeederPoints.length > 0 ? (
+            <View style={styles.feederPointsList}>
+              {assignedFeederPoints.map((fp, index) => (
+                <Card key={fp.id} style={styles.feederPointCard}>
+                  <View style={styles.feederPointContent}>
+                    <View style={styles.feederPointHeader}>
+                      <MaterialIcons name="location-on" size={20} color="#3b82f6" />
+                      <Text style={styles.feederPointName}>{fp.feederPointName}</Text>
+                      <View style={styles.tripProgress}>
+                        <Text style={styles.tripCount}>{fp.completedTrips}/3</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.feederPointArea}>{fp.areaName}, Ward {fp.wardNumber}</Text>
+                    <Text style={styles.feederPointLandmark}>📍 {fp.nearestLandmark}</Text>
+                    <View style={styles.feederPointStats}>
+                      <Text style={styles.householdsText}>~{fp.approximateHouseholds} households</Text>
+                      {fp.nextTripTime && fp.completedTrips < 3 && (
+                        <Text style={styles.nextTripTime}>Next: {fp.nextTripTime}</Text>
+                      )}
+                      {fp.completedTrips >= 3 && (
+                        <Text style={styles.completedText}>✅ All trips completed</Text>
+                      )}
+                    </View>
+                  </View>
+                </Card>
+              ))}
+            </View>
+          ) : (
+            <Card style={styles.noAssignmentCard}>
+              <MaterialIcons name="map" size={48} color="#f59e0b" />
+              <Text style={styles.noAssignmentTitle}>No Routes Assigned</Text>
+              <Text style={styles.noAssignmentText}>
+                Please contact your contractor to get route assignments.
+              </Text>
+            </Card>
+          )}
         </View>
 
         {/* Quick Actions */}
@@ -233,9 +443,9 @@ const DriverDashboard = ({ navigation }: any) => {
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.actionsGrid}>
             {driverActions.map((action, index) => (
-              <TouchableOpacity 
-                key={index} 
-                onPress={() => handleAction(action.action)} 
+              <TouchableOpacity
+                key={index}
+                onPress={() => handleAction(action.action)}
                 activeOpacity={0.7}
               >
                 <Card style={styles.actionCard}>
@@ -263,11 +473,11 @@ const DriverDashboard = ({ navigation }: any) => {
               <View style={styles.statusHeader}>
                 <View style={styles.statusIndicator}>
                   <View style={[styles.statusDot, { backgroundColor: '#10b981' }]} />
-                  <Text style={styles.statusText}>{driverStats.currentStatus}</Text>
+                  <Text style={styles.statusText}>{dashboardData?.shiftInfo.status === 'in_progress' ? 'On Duty' : 'Available'}</Text>
                 </View>
                 <Text style={styles.statusTime}>Last updated: Just now</Text>
               </View>
-              
+
               <View style={styles.statusDetails}>
                 <View style={styles.statusItem}>
                   <MaterialIcons name="schedule" size={16} color="#6b7280" />
@@ -503,6 +713,130 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#6b7280",
     marginLeft: 8,
+  },
+  // Vehicle styles
+  vehicleCard: {
+    marginBottom: 16,
+  },
+  vehicleContent: {
+    padding: 16,
+  },
+  vehicleHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  vehicleNumber: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+    marginLeft: 8,
+    flex: 1,
+  },
+  statusChip: {
+    height: 28,
+  },
+  vehicleDetails: {
+    marginBottom: 12,
+  },
+  vehicleType: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginBottom: 4,
+  },
+  contractorName: {
+    fontSize: 12,
+    color: "#9ca3af",
+  },
+  fuelInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  fuelLevel: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginLeft: 4,
+  },
+  // No assignment styles
+  noAssignmentCard: {
+    padding: 24,
+    alignItems: "center",
+    backgroundColor: "#fef3c7",
+  },
+  noAssignmentTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#92400e",
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  noAssignmentText: {
+    fontSize: 14,
+    color: "#a16207",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  // Feeder points styles
+  feederPointsList: {
+    gap: 12,
+  },
+  feederPointCard: {
+    marginBottom: 8,
+  },
+  feederPointContent: {
+    padding: 16,
+  },
+  feederPointHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  feederPointName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    marginLeft: 8,
+    flex: 1,
+  },
+  tripProgress: {
+    backgroundColor: "#eff6ff",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  tripCount: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#3b82f6",
+  },
+  feederPointArea: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginBottom: 4,
+  },
+  feederPointLandmark: {
+    fontSize: 12,
+    color: "#9ca3af",
+    marginBottom: 8,
+  },
+  feederPointStats: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  householdsText: {
+    fontSize: 12,
+    color: "#6b7280",
+  },
+  nextTripTime: {
+    fontSize: 12,
+    color: "#f59e0b",
+    fontWeight: "500",
+  },
+  completedText: {
+    fontSize: 12,
+    color: "#10b981",
+    fontWeight: "500",
   },
 })
 
