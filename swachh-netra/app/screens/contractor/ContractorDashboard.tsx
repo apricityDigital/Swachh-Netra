@@ -180,6 +180,13 @@ const ContractorDashboard = ({ navigation }: any) => {
   }
 
   const handleAction = (screen: string) => {
+    if (!contractorId) {
+      console.error("❌ ContractorId is null, cannot navigate")
+      return
+    }
+
+    console.log(`🧭 Navigating to ${screen} with contractorId: ${contractorId}`)
+
     switch (screen) {
       case "DriverAssignment":
         navigation.navigate("DriverAssignment", { contractorId })
@@ -280,12 +287,24 @@ const ContractorDashboard = ({ navigation }: any) => {
 
             <Card style={styles.statCard}>
               <View style={styles.statContent}>
+                <View style={[styles.statIcon, { backgroundColor: '#f0fdf4' }]}>
+                  <MaterialIcons name="local-shipping" size={24} color="#10b981" />
+                </View>
+                <View style={styles.statInfo}>
+                  <Text style={styles.statNumber}>{contractorStats.activeVehicles}</Text>
+                  <Text style={styles.statLabel}>Active Vehicles</Text>
+                </View>
+              </View>
+            </Card>
+
+            <Card style={styles.statCard}>
+              <View style={styles.statContent}>
                 <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
                   <MaterialIcons name="local-shipping" size={24} color="#f59e0b" />
                 </View>
                 <View style={styles.statInfo}>
                   <Text style={styles.statNumber}>{contractorStats.totalVehicles}</Text>
-                  <Text style={styles.statLabel}>Vehicles</Text>
+                  <Text style={styles.statLabel}>Total Vehicles</Text>
                 </View>
               </View>
             </Card>
@@ -329,6 +348,58 @@ const ContractorDashboard = ({ navigation }: any) => {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+
+        {/* Vehicle Status Overview */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Vehicle Status</Text>
+            <TouchableOpacity
+              onPress={() => handleAction("VehicleManagement")}
+              style={styles.viewAllButton}
+            >
+              <Text style={styles.viewAllText}>View All</Text>
+              <MaterialIcons name="chevron-right" size={16} color="#3b82f6" />
+            </TouchableOpacity>
+          </View>
+
+          <Card style={styles.vehicleStatusCard}>
+            <View style={styles.vehicleStatusContent}>
+              <View style={styles.vehicleStatusRow}>
+                <View style={styles.vehicleStatusItem}>
+                  <View style={styles.vehicleStatusIcon}>
+                    <MaterialIcons name="check-circle" size={20} color="#10b981" />
+                  </View>
+                  <View style={styles.vehicleStatusInfo}>
+                    <Text style={styles.vehicleStatusNumber}>{contractorStats.activeVehicles}</Text>
+                    <Text style={styles.vehicleStatusLabel}>Active</Text>
+                  </View>
+                </View>
+
+                <View style={styles.vehicleStatusItem}>
+                  <View style={styles.vehicleStatusIcon}>
+                    <MaterialIcons name="build" size={20} color="#f59e0b" />
+                  </View>
+                  <View style={styles.vehicleStatusInfo}>
+                    <Text style={styles.vehicleStatusNumber}>
+                      {contractorStats.totalVehicles - contractorStats.activeVehicles}
+                    </Text>
+                    <Text style={styles.vehicleStatusLabel}>Maintenance</Text>
+                  </View>
+                </View>
+
+                <View style={styles.vehicleStatusItem}>
+                  <View style={styles.vehicleStatusIcon}>
+                    <MaterialIcons name="location-on" size={20} color="#3b82f6" />
+                  </View>
+                  <View style={styles.vehicleStatusInfo}>
+                    <Text style={styles.vehicleStatusNumber}>{contractorStats.assignedFeederPoints}</Text>
+                    <Text style={styles.vehicleStatusLabel}>Routes</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </Card>
         </View>
 
         {/* Today's Performance */}
@@ -470,6 +541,65 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#111827",
     marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  viewAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  viewAllText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#3b82f6",
+  },
+  vehicleStatusCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  vehicleStatusContent: {
+    padding: 16,
+  },
+  vehicleStatusRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  vehicleStatusItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  vehicleStatusIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#f9fafb",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  vehicleStatusInfo: {
+    alignItems: "center",
+  },
+  vehicleStatusNumber: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  vehicleStatusLabel: {
+    fontSize: 12,
+    color: "#6b7280",
+    textAlign: "center",
   },
   // Statistics styles
   statsGrid: {

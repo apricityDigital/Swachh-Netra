@@ -29,6 +29,7 @@ const VehicleManagement = ({ navigation }: any) => {
   // Form state
   const [formData, setFormData] = useState({
     vehicleNumber: "",
+    vehicleName: "",
     capacity: "",
     vehicleType: "",
     status: "active" as Vehicle["status"],
@@ -76,6 +77,10 @@ const VehicleManagement = ({ navigation }: any) => {
   const validateForm = (): boolean => {
     if (!formData.vehicleNumber.trim()) {
       Alert.alert("Validation Error", "Vehicle number is required")
+      return false
+    }
+    if (!formData.vehicleName.trim()) {
+      Alert.alert("Validation Error", "Vehicle name is required")
       return false
     }
     if (!formData.capacity.trim() || isNaN(Number(formData.capacity))) {
@@ -126,6 +131,7 @@ const VehicleManagement = ({ navigation }: any) => {
       const user = FIREBASE_AUTH.currentUser
       const vehicleData = {
         vehicleNumber: formData.vehicleNumber.trim().toUpperCase(),
+        vehicleName: formData.vehicleName.trim(),
         capacity: Number(formData.capacity),
         vehicleType: formData.vehicleType.trim(),
         status: formData.status,
@@ -154,6 +160,7 @@ const VehicleManagement = ({ navigation }: any) => {
       setEditingVehicle(null)
       setFormData({
         vehicleNumber: "",
+        vehicleName: "",
         capacity: "",
         vehicleType: "",
         status: "active",
@@ -175,15 +182,46 @@ const VehicleManagement = ({ navigation }: any) => {
     setEditingVehicle(vehicle)
     setFormData({
       vehicleNumber: vehicle.vehicleNumber,
+      vehicleName: vehicle.vehicleName || "",
       capacity: vehicle.capacity.toString(),
       vehicleType: vehicle.vehicleType,
       status: vehicle.status,
-      manufacturer: (vehicle as any).manufacturer || "",
-      model: (vehicle as any).model || "",
-      year: (vehicle as any).year ? (vehicle as any).year.toString() : "",
-      fuelType: (vehicle as any).fuelType || "diesel",
+      manufacturer: vehicle.manufacturer || "",
+      model: vehicle.model || "",
+      year: vehicle.year ? vehicle.year.toString() : "",
+      fuelType: vehicle.fuelType || "diesel",
     })
     setShowForm(true)
+  }
+
+  const toggleVehicleStatus = async (vehicle: Vehicle) => {
+    const newStatus = vehicle.status === "active" ? "inactive" : "active"
+    const actionText = newStatus === "active" ? "activate" : "deactivate"
+
+    Alert.alert(
+      `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Vehicle`,
+      `Are you sure you want to ${actionText} vehicle ${vehicle.vehicleNumber}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: actionText.charAt(0).toUpperCase() + actionText.slice(1),
+          style: newStatus === "active" ? "default" : "destructive",
+          onPress: async () => {
+            try {
+              setLoading(true)
+              await VehicleService.toggleVehicleStatus(vehicle.id!)
+              Alert.alert("Success", `Vehicle ${actionText}d successfully`)
+              fetchVehicles()
+            } catch (error) {
+              console.error(`Error ${actionText}ing vehicle:`, error)
+              Alert.alert("Error", `Failed to ${actionText} vehicle`)
+            } finally {
+              setLoading(false)
+            }
+          }
+        }
+      ]
+    )
   }
 
   const deleteVehicle = async (vehicle: Vehicle) => {
@@ -236,6 +274,7 @@ const VehicleManagement = ({ navigation }: any) => {
         <View style={styles.vehicleHeader}>
           <View style={styles.vehicleInfo}>
             <Text style={styles.vehicleNumber}>{item.vehicleNumber}</Text>
+            {item.vehicleName && <Text style={styles.vehicleName}>{item.vehicleName}</Text>}
             <Text style={styles.vehicleType}>{item.vehicleType}</Text>
           </View>
           <Chip
@@ -268,6 +307,15 @@ const VehicleManagement = ({ navigation }: any) => {
             icon="edit"
           >
             Edit
+          </Button>
+          <Button
+            mode="outlined"
+            onPress={() => toggleVehicleStatus(item)}
+            style={[styles.actionButton, item.status === "active" ? styles.deactivateButton : styles.activateButton]}
+            textColor={item.status === "active" ? "#ef4444" : "#10b981"}
+            icon={item.status === "active" ? "block" : "check-circle"}
+          >
+            {item.status === "active" ? "Deactivate" : "Activate"}
           </Button>
           <Button
             mode="outlined"
@@ -362,6 +410,15 @@ const VehicleManagement = ({ navigation }: any) => {
                   />
 
                   <TextInput
+                    label="Vehicle Name *"
+                    value={formData.vehicleName}
+                    onChangeText={(text) => updateFormField("vehicleName", text)}
+                    style={styles.input}
+                    mode="outlined"
+                    placeholder="e.g., Garbage Truck 1, Compactor A"
+                  />
+
+                  <TextInput
                     label="Capacity (tons) *"
                     value={formData.capacity}
                     onChangeText={(text) => updateFormField("capacity", text)}
@@ -411,9 +468,14 @@ const VehicleManagement = ({ navigation }: any) => {
                         setEditingVehicle(null)
                         setFormData({
                           vehicleNumber: "",
+                          vehicleName: "",
                           capacity: "",
                           vehicleType: "",
                           status: "active",
+                          manufacturer: "",
+                          model: "",
+                          year: "",
+                          fuelType: "diesel",
                         })
                       }}
                       style={styles.cancelButton}
@@ -653,6 +715,12 @@ const styles = StyleSheet.create({
     color: "#111827",
     marginBottom: 4,
   },
+  vehicleName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#374151",
+    marginBottom: 4,
+  },
   vehicleType: {
     fontSize: 14,
     color: "#6b7280",
@@ -685,6 +753,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   deleteButton: {
+    borderColor: "#ef4444",
+  },
+  activateButton: {
+    borderColor: "#10b981",
+  },
+  deactivateButton: {
     borderColor: "#ef4444",
   },
   emptyCard: {
