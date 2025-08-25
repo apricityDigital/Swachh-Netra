@@ -18,6 +18,7 @@ import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 import ProtectedRoute from "../../components/ProtectedRoute"
 import { useRequireAuth } from "../../hooks/useRequireAuth"
 import { DriverService, DriverDashboardData } from "../../../services/DriverService"
+import EnhancedFeederPointsList from "../../components/EnhancedFeederPointsList"
 
 const { width } = Dimensions.get("window")
 
@@ -114,13 +115,28 @@ const DriverDashboard = ({ navigation }: any) => {
       console.log("🔍 [DriverDashboard] Verifying driver assignments...")
       await DriverService.verifyDriverAssignments(userData.uid)
 
-      const data = await DriverService.getDriverDashboardData(userData.uid)
+      // Use enhanced method that includes daily assignments
+      const data = await DriverService.getDriverDashboardDataWithDailyAssignments(userData.uid)
       console.log("📊 [DriverDashboard] Dashboard data received:", {
         driverId: data.driverId,
         driverName: data.driverName,
         hasVehicle: !!data.assignedVehicle,
+        vehicleDetails: data.assignedVehicle ? {
+          id: data.assignedVehicle.id,
+          vehicleNumber: data.assignedVehicle.vehicleNumber,
+          type: data.assignedVehicle.type
+        } : null,
         feederPointsCount: data.assignedFeederPoints.length,
-        hasContractor: !!data.contractorInfo
+        feederPointDetails: data.assignedFeederPoints.slice(0, 3).map(fp => ({
+          id: fp.id,
+          name: fp.feederPointName,
+          area: fp.areaName
+        })),
+        hasContractor: !!data.contractorInfo,
+        contractorDetails: data.contractorInfo ? {
+          id: data.contractorInfo.id,
+          name: data.contractorInfo.name
+        } : null
       })
 
       setDashboardData(data)
@@ -156,7 +172,12 @@ const DriverDashboard = ({ navigation }: any) => {
     const unsubscribe = DriverService.subscribeToDriverData(
       userData.uid,
       (data: DriverDashboardData) => {
-        console.log("📡 [DriverDashboard] Real-time update received")
+        console.log("📡 [DriverDashboard] Real-time update received:", {
+          hasVehicle: !!data.assignedVehicle,
+          vehicleId: data.assignedVehicle?.id,
+          feederPointsCount: data.assignedFeederPoints.length,
+          hasContractor: !!data.contractorInfo
+        })
         setDashboardData(data)
         setAssignedVehicle(data.assignedVehicle)
         setAssignedFeederPoints(data.assignedFeederPoints)
@@ -331,6 +352,38 @@ const DriverDashboard = ({ navigation }: any) => {
             <TouchableOpacity onPress={fetchDashboardData} style={styles.refreshButton}>
               <MaterialIcons name="refresh" size={20} color="#6b7280" />
             </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                console.log("🐛 [DEBUG] Driver Dashboard State:", {
+                  driverId: userData?.uid,
+                  assignedFeederPointsCount: assignedFeederPoints.length,
+                  assignedVehicle: assignedVehicle?.vehicleNumber,
+                  contractorInfo: contractorInfo?.name,
+                  todayStats
+                })
+                Alert.alert(
+                  "Debug Info",
+                  `Driver ID: ${userData?.uid}\nRoutes: ${assignedFeederPoints.length}\nVehicle: ${assignedVehicle?.vehicleNumber || "None"}\nContractor: ${contractorInfo?.name || "None"}`,
+                  [
+                    { text: "Refresh", onPress: fetchDashboardData },
+                    { text: "Test Daily Assignment", onPress: async () => {
+                      if (userData?.uid) {
+                        try {
+                          const todayAssignment = await DriverService.getTodayDailyAssignment(userData.uid)
+                          Alert.alert("Daily Assignment Test", `Found ${todayAssignment.length} routes for today`)
+                        } catch (error) {
+                          Alert.alert("Error", `Failed to test: ${error}`)
+                        }
+                      }
+                    }},
+                    { text: "OK" }
+                  ]
+                )
+              }}
+              style={styles.debugButton}
+            >
+              <MaterialIcons name="bug-report" size={20} color="#6b7280" />
+            </TouchableOpacity>
             <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
               <MaterialIcons name="logout" size={20} color="#6b7280" />
             </TouchableOpacity>
@@ -443,36 +496,52 @@ const DriverDashboard = ({ navigation }: any) => {
           </View>
         )}
 
-        {/* Assigned Feeder Points */}
+        {/* Enhanced Assigned Feeder Points */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Today's Routes ({assignedFeederPoints.length} locations)</Text>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Today's Routes ({assignedFeederPoints.length} locations)</Text>
+            {assignedFeederPoints.length > 0 && (
+              <TouchableOpacity
+                style={styles.viewAllButton}
+                onPress={() => {
+                  // Navigate to detailed routes view if needed
+                  console.log("View all routes pressed")
+                }}
+              >
+                <Text style={styles.viewAllText}>View All</Text>
+                <MaterialIcons name="arrow-forward" size={16} color="#3b82f6" />
+              </TouchableOpacity>
+            )}
+          </View>
+
           {assignedFeederPoints.length > 0 ? (
-            <View style={styles.feederPointsList}>
-              {assignedFeederPoints.map((fp, index) => (
-                <Card key={fp.id} style={styles.feederPointCard}>
-                  <View style={styles.feederPointContent}>
-                    <View style={styles.feederPointHeader}>
-                      <MaterialIcons name="location-on" size={20} color="#3b82f6" />
-                      <Text style={styles.feederPointName}>{fp.feederPointName}</Text>
-                      <View style={styles.tripProgress}>
-                        <Text style={styles.tripCount}>{fp.completedTrips}/3</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.feederPointArea}>{fp.areaName}, Ward {fp.wardNumber}</Text>
-                    <Text style={styles.feederPointLandmark}>📍 {fp.nearestLandmark}</Text>
-                    <View style={styles.feederPointStats}>
-                      <Text style={styles.householdsText}>~{fp.approximateHouseholds} households</Text>
-                      {fp.nextTripTime && fp.completedTrips < 3 && (
-                        <Text style={styles.nextTripTime}>Next: {fp.nextTripTime}</Text>
-                      )}
-                      {fp.completedTrips >= 3 && (
-                        <Text style={styles.completedText}>✅ All trips completed</Text>
-                      )}
-                    </View>
-                  </View>
-                </Card>
-              ))}
-            </View>
+            <EnhancedFeederPointsList
+              feederPoints={assignedFeederPoints}
+              onFeederPointPress={(feederPoint) => {
+                console.log("Feeder point pressed:", feederPoint.feederPointName)
+                // Navigate to feeder point details or trip start screen
+              }}
+              onStartTrip={(feederPoint) => {
+                console.log("Start trip for:", feederPoint.feederPointName)
+                // Navigate to trip start screen
+                Alert.alert(
+                  "Start Trip",
+                  `Start collection trip for ${feederPoint.feederPointName}?`,
+                  [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                      text: "Start",
+                      onPress: () => {
+                        // TODO: Implement trip start logic
+                        console.log("Starting trip for:", feederPoint.feederPointName)
+                      }
+                    }
+                  ]
+                )
+              }}
+              showSearch={true}
+              showGrouping={true}
+            />
           ) : (
             <Card style={styles.noAssignmentCard}>
               <MaterialIcons name="map" size={48} color="#f59e0b" />
@@ -757,6 +826,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   refreshButton: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  debugButton: {
     padding: 8,
     borderRadius: 8,
   },
@@ -1071,6 +1144,22 @@ const styles = StyleSheet.create({
   contractorButtonsRow: {
     flexDirection: "row",
     gap: 8,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  viewAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  viewAllText: {
+    fontSize: 14,
+    color: "#3b82f6",
+    fontWeight: "500",
   },
 })
 

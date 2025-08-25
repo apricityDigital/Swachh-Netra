@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore"
 import { FIRESTORE_DB } from "../FirebaseConfig"
 import { FeederPointService, FeederPoint } from "./FeederPointService"
+import { DailyAssignmentService } from "./DailyAssignmentService"
 
 // Driver-specific interfaces
 export interface DriverDashboardData {
@@ -66,6 +67,8 @@ export interface AssignedFeederPoint {
   totalTrips: number
   nextTripTime?: string
   estimatedDuration?: number
+  priority?: "high" | "medium" | "low"
+  status?: "pending" | "in_progress" | "completed"
 }
 
 export interface TripRecord {
@@ -439,7 +442,7 @@ export class DriverService {
 
       return {
         startTime: startTime?.toLocaleTimeString(),
-        status: allCompleted ? "completed" : "in_progress" as const
+        status: (allCompleted ? "completed" : "in_progress") as "completed" | "in_progress"
       }
 
     } catch (error) {
@@ -513,7 +516,7 @@ export class DriverService {
     // Listen to driver profile changes
     const driverDocRef = doc(FIRESTORE_DB, "users", driverId)
     const unsubscribeDriver = onSnapshot(driverDocRef, () => {
-      this.getDriverDashboardData(driverId)
+      this.getDriverDashboardDataWithDailyAssignments(driverId)
         .then(callback)
         .catch(console.error)
     })
@@ -531,11 +534,22 @@ export class DriverService {
     )
 
     const unsubscribeTrips = onSnapshot(tripsQuery, () => {
-      this.getDriverDashboardData(driverId)
+      this.getDriverDashboardDataWithDailyAssignments(driverId)
         .then(callback)
         .catch(console.error)
     })
     unsubscribers.push(unsubscribeTrips)
+
+    // Listen to daily assignment changes
+    const unsubscribeDailyAssignments = DailyAssignmentService.subscribeToDriverAssignments(
+      driverId,
+      () => {
+        this.getDriverDashboardDataWithDailyAssignments(driverId)
+          .then(callback)
+          .catch(console.error)
+      }
+    )
+    unsubscribers.push(unsubscribeDailyAssignments)
 
     // Return cleanup function
     return () => {
@@ -617,6 +631,132 @@ export class DriverService {
     } catch (error) {
       console.error("❌ [DriverService] Error fetching assignments from collection:", error)
       return []
+    }
+  }
+
+  // Get today's daily assignment for driver
+  static async getTodayDailyAssignment(driverId: string): Promise<AssignedFeederPoint[]> {
+    try {
+      const todayString = new Date().toISOString().split('T')[0]
+      console.log("📅 [DriverService] Fetching today's daily assignment for driver:", driverId, "date:", todayString)
+
+      const todayAssignment = await DailyAssignmentService.getTodayAssignment(driverId)
+
+      console.log("📋 [DriverService] Today's assignment result:", {
+        found: !!todayAssignment,
+        assignmentId: todayAssignment?.id,
+        feederPointCount: todayAssignment?.feederPointIds?.length || 0,
+        status: todayAssignment?.status,
+        assignmentDate: todayAssignment?.assignmentDate
+      })
+
+      if (!todayAssignment || todayAssignment.feederPointIds.length === 0) {
+        console.log("⚠️ [DriverService] No daily assignment found for today - checking fallback methods")
+
+        // Fallback to old assignment system
+        console.log("🔄 [DriverService] Trying fallback to old assignment system...")
+        return await this.getAssignedFeederPoints(driverId)
+      }
+
+      // Get feeder point details
+      const feederPointsData = await Promise.all(
+        todayAssignment.feederPointIds.map(async (fpId) => {
+          try {
+            const fpDoc = await getDoc(doc(FIRESTORE_DB, "feederPoints", fpId))
+            if (fpDoc.exists()) {
+              return { id: fpDoc.id, ...fpDoc.data() } as FeederPoint
+            }
+            return null
+          } catch (error) {
+            console.error(`❌ [DriverService] Error fetching feeder point ${fpId}:`, error)
+            return null
+          }
+        })
+      )
+
+      const validFeederPoints = feederPointsData.filter(fp => fp !== null) as FeederPoint[]
+
+      // Get today's trip records for progress tracking
+      const todayDate = new Date()
+      todayDate.setHours(0, 0, 0, 0)
+      const todayTimestamp = Timestamp.fromDate(todayDate)
+
+      const tripsQuery = query(
+        collection(FIRESTORE_DB, "tripRecords"),
+        where("driverId", "==", driverId),
+        where("createdAt", ">=", todayTimestamp)
+      )
+
+      const tripsSnapshot = await getDocs(tripsQuery)
+      const tripsByFeederPoint: { [key: string]: number } = {}
+
+      tripsSnapshot.forEach((doc) => {
+        const trip = doc.data()
+        if (trip.status === "completed") {
+          tripsByFeederPoint[trip.feederPointId] = (tripsByFeederPoint[trip.feederPointId] || 0) + 1
+        }
+      })
+
+      // Convert to AssignedFeederPoint format with progress tracking
+      const assignedFeederPoints: AssignedFeederPoint[] = validFeederPoints.map((fp, index) => {
+        const completedTrips = tripsByFeederPoint[fp.id!] || 0
+        const totalTrips = 3 // Standard 3 trips per day per feeder point
+
+        return {
+          id: fp.id!,
+          feederPointName: fp.feederPointName,
+          areaName: fp.areaName,
+          wardNumber: fp.wardNumber,
+          nearestLandmark: fp.nearestLandmark,
+          approximateHouseholds: fp.approximateHouseholds,
+          completedTrips,
+          totalTrips,
+          nextTripTime: this.calculateNextTripTime(completedTrips),
+          estimatedDuration: 45, // Default 45 minutes per trip
+          priority: this.calculatePriority(index, validFeederPoints.length),
+          status: completedTrips >= totalTrips ? "completed" :
+                 completedTrips > 0 ? "in_progress" : "pending"
+        }
+      })
+
+      console.log(`✅ [DriverService] Found ${assignedFeederPoints.length} assigned feeder points for today`)
+      return assignedFeederPoints
+
+    } catch (error) {
+      console.error("❌ [DriverService] Error fetching today's daily assignment:", error)
+      return []
+    }
+  }
+
+  // Calculate priority based on position in list and other factors
+  private static calculatePriority(index: number, total: number): "high" | "medium" | "low" {
+    const ratio = index / total
+    if (ratio < 0.3) return "high"
+    if (ratio < 0.7) return "medium"
+    return "low"
+  }
+
+  // Enhanced method to get driver dashboard data with daily assignments
+  static async getDriverDashboardDataWithDailyAssignments(driverId: string): Promise<DriverDashboardData> {
+    try {
+      console.log("🔄 [DriverService] Fetching enhanced driver dashboard data for:", driverId)
+
+      // Get basic dashboard data
+      const basicData = await this.getDriverDashboardData(driverId)
+
+      // Get today's daily assignment (this will override the basic assigned feeder points)
+      const todayAssignedFeederPoints = await this.getTodayDailyAssignment(driverId)
+
+      // Return enhanced data with today's specific assignments
+      return {
+        ...basicData,
+        assignedFeederPoints: todayAssignedFeederPoints
+      }
+
+    } catch (error) {
+      console.error("❌ [DriverService] Error fetching enhanced dashboard data:", error)
+      // Fallback to basic data
+      return this.getDriverDashboardData(driverId)
     }
   }
 }

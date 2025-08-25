@@ -110,7 +110,7 @@ export class ContractorDriverConnectionService {
       if (assignmentData.length === 0) {
         inconsistencies.push("No active assignment found in driverAssignments collection")
       } else {
-        const latestAssignment = assignmentData[0]
+        const latestAssignment = assignmentData[0] as any
         if (latestAssignment.vehicleId !== driverData?.assignedVehicleId) {
           inconsistencies.push(`Assignment vehicleId (${latestAssignment.vehicleId}) doesn't match driver assignedVehicleId (${driverData?.assignedVehicleId})`)
         }

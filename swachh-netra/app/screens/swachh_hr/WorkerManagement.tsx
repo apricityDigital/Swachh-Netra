@@ -90,7 +90,7 @@ const WorkerManagement = ({ navigation }: any) => {
         worker.ward.toLowerCase().includes(searchQuery.toLowerCase()) ||
         worker.kothi.toLowerCase().includes(searchQuery.toLowerCase()) ||
         worker.feederPoint.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        worker.employeeId.toLowerCase().includes(searchQuery.toLowerCase())
+        worker.employeeId?.toLowerCase().includes(searchQuery.toLowerCase())
       )
       setFilteredWorkers(filtered)
     }

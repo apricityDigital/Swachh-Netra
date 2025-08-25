@@ -56,6 +56,14 @@ const ContractorDashboard = ({ navigation }: any) => {
       screen: "DriverAssignment",
     },
     {
+      title: "Daily Assignments",
+      description: "Manage daily route assignments",
+      icon: "today",
+      color: "#3b82f6",
+      bgColor: "#dbeafe",
+      screen: "ContractorDailyAssignments",
+    },
+    {
       title: "Vehicle Management",
       description: "Manage fleet and assignments",
       icon: "local-shipping",
@@ -190,6 +198,9 @@ const ContractorDashboard = ({ navigation }: any) => {
     switch (screen) {
       case "DriverAssignment":
         navigation.navigate("DriverAssignment", { contractorId })
+        break
+      case "ContractorDailyAssignments":
+        navigation.navigate("ContractorDailyAssignments", { contractorId })
         break
       case "VehicleManagement":
         navigation.navigate("ContractorVehicleManagement", { contractorId })
