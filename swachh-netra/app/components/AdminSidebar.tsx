@@ -138,6 +138,13 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
       icon: "assignment",
       items: [
         {
+          id: "driver-assignments",
+          title: "Driver Assignments",
+          icon: "person-add",
+          screen: "AdminDriverAssignment",
+          description: "Assign drivers to contractors"
+        },
+        {
           id: "point-assignments",
           title: "Point Assignments",
           icon: "assignment",
@@ -150,6 +157,13 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           icon: "assignment-ind",
           screen: "VehicleAssignment",
           description: "Assign vehicles to contractors"
+        },
+        {
+          id: "connection-test",
+          title: "Connection Test",
+          icon: "link",
+          screen: "ContractorDriverConnectionTest",
+          description: "Test contractor-driver connections"
         }
       ]
     },

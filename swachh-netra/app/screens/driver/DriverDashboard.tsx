@@ -62,6 +62,11 @@ const DriverDashboard = ({ navigation }: any) => {
   const [dashboardData, setDashboardData] = useState<DriverDashboardData | null>(null)
   const [assignedVehicle, setAssignedVehicle] = useState<AssignedVehicle | null>(null)
   const [assignedFeederPoints, setAssignedFeederPoints] = useState<AssignedFeederPoint[]>([])
+  const [contractorInfo, setContractorInfo] = useState<{
+    id: string
+    name: string
+    contact?: string
+  } | null>(null)
   const [todayStats, setTodayStats] = useState<TodayStats>({
     totalTrips: 0,
     completedTrips: 0,
@@ -72,9 +77,18 @@ const DriverDashboard = ({ navigation }: any) => {
   })
 
   useEffect(() => {
+    console.log("🔄 [DriverDashboard] useEffect triggered with userData:", {
+      uid: userData?.uid,
+      email: userData?.email,
+      fullName: userData?.fullName,
+      role: userData?.role
+    })
+
     if (userData?.uid) {
       fetchDashboardData()
       setupRealTimeListeners()
+    } else {
+      console.warn("⚠️ [DriverDashboard] No userData available")
     }
   }, [userData])
 
@@ -82,13 +96,39 @@ const DriverDashboard = ({ navigation }: any) => {
     try {
       setLoading(true)
       console.log("🚛 [DriverDashboard] Fetching dashboard data for driver:", userData?.uid)
+      console.log("👤 [DriverDashboard] Current user data:", {
+        uid: userData?.uid,
+        email: userData?.email,
+        fullName: userData?.fullName,
+        role: userData?.role,
+        contractorId: userData?.contractorId
+      })
 
-      const data = await DriverService.getDriverDashboardData(userData?.uid || '')
+      if (!userData?.uid) {
+        console.error("❌ [DriverDashboard] No user ID available")
+        Alert.alert("Error", "User session invalid. Please log in again.")
+        return
+      }
+
+      // First verify driver assignments from contractor assignments
+      console.log("🔍 [DriverDashboard] Verifying driver assignments...")
+      await DriverService.verifyDriverAssignments(userData.uid)
+
+      const data = await DriverService.getDriverDashboardData(userData.uid)
+      console.log("📊 [DriverDashboard] Dashboard data received:", {
+        driverId: data.driverId,
+        driverName: data.driverName,
+        hasVehicle: !!data.assignedVehicle,
+        feederPointsCount: data.assignedFeederPoints.length,
+        hasContractor: !!data.contractorInfo
+      })
+
       setDashboardData(data)
 
       // Set individual state items for easier access
       setAssignedVehicle(data.assignedVehicle)
       setAssignedFeederPoints(data.assignedFeederPoints)
+      setContractorInfo(data.contractorInfo)
       setTodayStats({
         totalTrips: data.todayTrips.total,
         completedTrips: data.todayTrips.completed,
@@ -120,6 +160,7 @@ const DriverDashboard = ({ navigation }: any) => {
         setDashboardData(data)
         setAssignedVehicle(data.assignedVehicle)
         setAssignedFeederPoints(data.assignedFeederPoints)
+        setContractorInfo(data.contractorInfo)
         setTodayStats({
           totalTrips: data.todayTrips.total,
           completedTrips: data.todayTrips.completed,
@@ -286,9 +327,14 @@ const DriverDashboard = ({ navigation }: any) => {
               <Text style={styles.roleText}>Driver</Text>
             </View>
           </View>
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-            <MaterialIcons name="logout" size={20} color="#6b7280" />
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={fetchDashboardData} style={styles.refreshButton}>
+              <MaterialIcons name="refresh" size={20} color="#6b7280" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+              <MaterialIcons name="logout" size={20} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -438,6 +484,68 @@ const DriverDashboard = ({ navigation }: any) => {
           )}
         </View>
 
+        {/* Contractor Information */}
+        {contractorInfo && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Contractor Information</Text>
+            <Card style={styles.contractorCard}>
+              <View style={styles.contractorContent}>
+                <View style={styles.contractorHeader}>
+                  <MaterialIcons name="business" size={24} color="#3b82f6" />
+                  <Text style={styles.contractorTitle}>{contractorInfo.name}</Text>
+                </View>
+                {contractorInfo.contact && (
+                  <View style={styles.contractorContact}>
+                    <MaterialIcons name="phone" size={16} color="#6b7280" />
+                    <Text style={styles.contactText}>{contractorInfo.contact}</Text>
+                  </View>
+                )}
+                <View style={styles.contractorActions}>
+                  <View style={styles.contractorButtonsRow}>
+                    <Button
+                      mode="outlined"
+                      onPress={() => {
+                        navigation.navigate('ContractorCommunication', {
+                          contractorId: contractorInfo.id,
+                          contractorName: contractorInfo.name
+                        })
+                      }}
+                      style={[styles.contactButton, { flex: 1, marginRight: 8 }]}
+                      icon="chat"
+                    >
+                      Message
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      onPress={() => {
+                        if (contractorInfo.contact) {
+                          Alert.alert(
+                            "Contact Contractor",
+                            `Call ${contractorInfo.name}?`,
+                            [
+                              { text: "Cancel" },
+                              {
+                                text: "Call", onPress: () => {
+                                  // TODO: Implement phone call functionality
+                                  Alert.alert("Feature Coming Soon", "Phone call functionality will be implemented soon.")
+                                }
+                              }
+                            ]
+                          )
+                        }
+                      }}
+                      style={[styles.contactButton, { flex: 1 }]}
+                      icon="phone"
+                    >
+                      Call
+                    </Button>
+                  </View>
+                </View>
+              </View>
+            </Card>
+          </View>
+        )}
+
         {/* Quick Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
@@ -463,6 +571,85 @@ const DriverDashboard = ({ navigation }: any) => {
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* Connection Status */}
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: "#06b6d4", marginTop: 12 }]}
+            onPress={async () => {
+              try {
+                setLoading(true)
+                console.log("🔍 [DriverDashboard] Testing contractor-driver connection")
+
+                if (!userData?.contractorId) {
+                  Alert.alert("No Contractor", "You are not assigned to any contractor yet.")
+                  return
+                }
+
+                // Import the service dynamically to avoid circular imports
+                const { ContractorDriverConnectionService } = await import("../../../services/ContractorDriverConnectionService")
+
+                const testResult = await ContractorDriverConnectionService.testContractorDriverConnection(
+                  userData.contractorId,
+                  userData.uid
+                )
+
+                const statusMessage = testResult.isDataConsistent
+                  ? "✅ Connection is working properly!"
+                  : `❌ Connection issues found:\n${testResult.inconsistencies.join('\n')}`
+
+                Alert.alert(
+                  "Connection Status",
+                  statusMessage,
+                  [
+                    { text: "Refresh Data", onPress: fetchDashboardData },
+                    { text: "OK" }
+                  ]
+                )
+              } catch (error) {
+                console.error("❌ [DriverDashboard] Error testing connection:", error)
+                Alert.alert("Error", "Failed to test connection")
+              } finally {
+                setLoading(false)
+              }
+            }}
+          >
+            <View style={styles.actionContent}>
+              <View style={[styles.actionIcon, { backgroundColor: "#ffffff" }]}>
+                <MaterialIcons name="link" size={28} color="#06b6d4" />
+              </View>
+              <View style={styles.actionInfo}>
+                <Text style={[styles.actionTitle, { color: "#ffffff" }]}>Connection Test</Text>
+                <Text style={[styles.actionDescription, { color: "#ffffff" }]}>Check contractor connection</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color="#ffffff" />
+            </View>
+          </TouchableOpacity>
+
+          {/* Debug Button - Remove in production */}
+          <TouchableOpacity
+            style={[styles.actionCard, { backgroundColor: "#f59e0b", marginTop: 8 }]}
+            onPress={() => {
+              Alert.alert(
+                "Debug Info",
+                `Driver ID: ${userData?.uid}\nEmail: ${userData?.email}\nVehicle: ${assignedVehicle?.vehicleNumber || "None"}\nRoutes: ${assignedFeederPoints.length}\nContractor: ${contractorInfo?.name || "None"}`,
+                [
+                  { text: "Refresh Data", onPress: fetchDashboardData },
+                  { text: "OK" }
+                ]
+              )
+            }}
+          >
+            <View style={styles.actionContent}>
+              <View style={[styles.actionIcon, { backgroundColor: "#ffffff" }]}>
+                <MaterialIcons name="bug-report" size={28} color="#f59e0b" />
+              </View>
+              <View style={styles.actionInfo}>
+                <Text style={[styles.actionTitle, { color: "#ffffff" }]}>Debug Info</Text>
+                <Text style={[styles.actionDescription, { color: "#ffffff" }]}>View assignment details</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color="#ffffff" />
+            </View>
+          </TouchableOpacity>
         </View>
 
         {/* Current Status */}
@@ -563,6 +750,15 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     fontWeight: "500",
     marginTop: 2,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 8,
   },
   logoutButton: {
     padding: 8,
@@ -837,6 +1033,44 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#10b981",
     fontWeight: "500",
+  },
+  // Contractor styles
+  contractorCard: {
+    marginBottom: 16,
+  },
+  contractorContent: {
+    padding: 16,
+  },
+  contractorHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  contractorTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+    marginLeft: 8,
+  },
+  contractorContact: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  contactText: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginLeft: 4,
+  },
+  contractorActions: {
+    alignItems: "flex-start",
+  },
+  contactButton: {
+    borderColor: "#3b82f6",
+  },
+  contractorButtonsRow: {
+    flexDirection: "row",
+    gap: 8,
   },
 })
 

@@ -137,6 +137,15 @@ const AdminDashboard = ({ navigation }: any) => {
       category: "Resource Management"
     },
     {
+      title: "Driver Assignments",
+      description: "Assign drivers to contractors",
+      screen: "AdminDriverAssignment",
+      icon: "person-add",
+      color: "#8b5cf6",
+      bgColor: "#faf5ff",
+      category: "Assignment Management"
+    },
+    {
       title: "Point Assignments",
       description: "Assign points to contractors",
       screen: "FeederPointAssignment",
@@ -152,6 +161,15 @@ const AdminDashboard = ({ navigation }: any) => {
       icon: "assignment-ind",
       color: "#ef4444",
       bgColor: "#fef2f2",
+      category: "Assignment Management"
+    },
+    {
+      title: "Connection Test",
+      description: "Test contractor-driver connections",
+      screen: "ContractorDriverConnectionTest",
+      icon: "link",
+      color: "#06b6d4",
+      bgColor: "#ecfeff",
       category: "Assignment Management"
     },
     {

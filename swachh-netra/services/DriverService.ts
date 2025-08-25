@@ -8,7 +8,9 @@ import {
   orderBy,
   onSnapshot,
   Timestamp,
-  limit
+  limit,
+  updateDoc,
+  serverTimestamp
 } from "firebase/firestore"
 import { FIRESTORE_DB } from "../FirebaseConfig"
 import { FeederPointService, FeederPoint } from "./FeederPointService"
@@ -154,9 +156,21 @@ export class DriverService {
   // Get vehicle assigned to driver
   static async getAssignedVehicle(driverId: string): Promise<AssignedVehicle | null> {
     try {
+      console.log("🚗 [DriverService] Fetching assigned vehicle for driver:", driverId)
+
       // Check if driver has assignedVehicleId in their profile
       const driverDoc = await getDoc(doc(FIRESTORE_DB, "users", driverId))
+      if (!driverDoc.exists()) {
+        console.error("❌ [DriverService] Driver document not found:", driverId)
+        return null
+      }
+
       const driverData = driverDoc.data()
+      console.log("👤 [DriverService] Driver data:", {
+        assignedVehicleId: driverData?.assignedVehicleId,
+        contractorId: driverData?.contractorId,
+        assignedFeederPointIds: driverData?.assignedFeederPointIds?.length || 0
+      })
 
       if (!driverData?.assignedVehicleId) {
         console.log("⚠️ [DriverService] No vehicle assigned to driver")
@@ -201,9 +215,20 @@ export class DriverService {
   // Get feeder points assigned to driver
   static async getAssignedFeederPoints(driverId: string): Promise<AssignedFeederPoint[]> {
     try {
+      console.log("📍 [DriverService] Fetching assigned feeder points for driver:", driverId)
+
       // Get driver's assigned feeder point IDs
       const driverDoc = await getDoc(doc(FIRESTORE_DB, "users", driverId))
+      if (!driverDoc.exists()) {
+        console.error("❌ [DriverService] Driver document not found:", driverId)
+        return []
+      }
+
       const driverData = driverDoc.data()
+      console.log("📋 [DriverService] Driver feeder point assignments:", {
+        assignedFeederPointIds: driverData?.assignedFeederPointIds || [],
+        count: driverData?.assignedFeederPointIds?.length || 0
+      })
 
       if (!driverData?.assignedFeederPointIds || driverData.assignedFeederPointIds.length === 0) {
         console.log("⚠️ [DriverService] No feeder points assigned to driver")
@@ -516,6 +541,82 @@ export class DriverService {
     return () => {
       console.log("🔄 [DriverService] Cleaning up real-time listeners")
       unsubscribers.forEach(unsubscribe => unsubscribe())
+    }
+  }
+
+  // Verify and refresh driver assignments from contractor assignments
+  static async verifyDriverAssignments(driverId: string): Promise<void> {
+    try {
+      console.log("🔍 [DriverService] Verifying driver assignments for:", driverId)
+
+      // Get active driver assignments from driverAssignments collection
+      const assignmentsRef = collection(FIRESTORE_DB, "driverAssignments")
+      const q = query(
+        assignmentsRef,
+        where("driverId", "==", driverId),
+        where("status", "==", "active")
+      )
+
+      const querySnapshot = await getDocs(q)
+
+      if (querySnapshot.empty) {
+        console.log("⚠️ [DriverService] No active assignments found in driverAssignments collection")
+        return
+      }
+
+      // Get the latest assignment
+      const latestAssignment = querySnapshot.docs[0].data()
+      console.log("📋 [DriverService] Latest assignment found:", {
+        vehicleId: latestAssignment.vehicleId,
+        feederPointIds: latestAssignment.feederPointIds,
+        contractorId: latestAssignment.contractorId
+      })
+
+      // Update driver document with assignment data
+      const driverRef = doc(FIRESTORE_DB, "users", driverId)
+      await updateDoc(driverRef, {
+        assignedVehicleId: latestAssignment.vehicleId,
+        assignedFeederPointIds: latestAssignment.feederPointIds || [],
+        contractorId: latestAssignment.contractorId,
+        updatedAt: serverTimestamp()
+      })
+
+      console.log("✅ [DriverService] Driver assignments verified and updated")
+
+    } catch (error) {
+      console.error("❌ [DriverService] Error verifying driver assignments:", error)
+    }
+  }
+
+  // Get driver assignments from driverAssignments collection
+  static async getDriverAssignmentsFromCollection(driverId: string): Promise<any[]> {
+    try {
+      console.log("📋 [DriverService] Fetching assignments from driverAssignments collection")
+
+      const assignmentsRef = collection(FIRESTORE_DB, "driverAssignments")
+      const q = query(
+        assignmentsRef,
+        where("driverId", "==", driverId),
+        where("status", "==", "active"),
+        orderBy("assignedAt", "desc")
+      )
+
+      const querySnapshot = await getDocs(q)
+      const assignments: any[] = []
+
+      querySnapshot.forEach((doc) => {
+        assignments.push({
+          id: doc.id,
+          ...doc.data()
+        })
+      })
+
+      console.log("📊 [DriverService] Found", assignments.length, "active assignments")
+      return assignments
+
+    } catch (error) {
+      console.error("❌ [DriverService] Error fetching assignments from collection:", error)
+      return []
     }
   }
 }

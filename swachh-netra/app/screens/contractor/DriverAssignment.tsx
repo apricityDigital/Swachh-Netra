@@ -36,15 +36,15 @@ interface Vehicle {
 }
 
 const DriverAssignment = ({ route, navigation }: any) => {
-  const { contractorId } = route.params
-  
+  const { contractorId } = route.params || {}
+
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [feederPoints, setFeederPoints] = useState<FeederPoint[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  
+
   // Modal states
   const [assignModalVisible, setAssignModalVisible] = useState(false)
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null)
@@ -52,24 +52,46 @@ const DriverAssignment = ({ route, navigation }: any) => {
   const [selectedFeederPoints, setSelectedFeederPoints] = useState<string[]>([])
 
   useEffect(() => {
-    fetchData()
-  }, [])
+    if (contractorId) {
+      fetchData()
+    } else {
+      console.error("❌ [DriverAssignment] No contractorId provided")
+      Alert.alert("Error", "Contractor ID is required", [
+        { text: "Go Back", onPress: () => navigation.goBack() }
+      ])
+    }
+  }, [contractorId])
 
   const fetchData = async () => {
+    if (!contractorId) {
+      console.error("❌ [DriverAssignment] Cannot fetch data without contractorId")
+      setLoading(false)
+      setRefreshing(false)
+      return
+    }
+
     setLoading(true)
     try {
+      console.log("🔄 [DriverAssignment] Fetching data for contractor:", contractorId)
+
       const [driversData, vehiclesData, feederPointsData] = await Promise.all([
         ContractorService.getContractorDrivers(contractorId),
         ContractorService.getContractorVehicles(contractorId),
         ContractorService.getContractorFeederPoints(contractorId),
       ])
-      
-      setDrivers(driversData)
-      setVehicles(vehiclesData)
-      setFeederPoints(feederPointsData)
+
+      console.log("✅ [DriverAssignment] Data fetched successfully:", {
+        drivers: driversData.length,
+        vehicles: vehiclesData.length,
+        feederPoints: feederPointsData.length
+      })
+
+      setDrivers(driversData || [])
+      setVehicles(vehiclesData || [])
+      setFeederPoints(feederPointsData || [])
     } catch (error) {
-      console.error("Error fetching data:", error)
-      Alert.alert("Error", "Failed to load assignment data")
+      console.error("❌ [DriverAssignment] Error fetching data:", error)
+      Alert.alert("Error", "Failed to load assignment data. Please try again.")
     } finally {
       setLoading(false)
       setRefreshing(false)
@@ -97,7 +119,7 @@ const DriverAssignment = ({ route, navigation }: any) => {
   }
 
   const handleFeederPointToggle = (feederPointId: string) => {
-    setSelectedFeederPoints(prev => 
+    setSelectedFeederPoints(prev =>
       prev.includes(feederPointId)
         ? prev.filter(id => id !== feederPointId)
         : [...prev, feederPointId]
@@ -110,30 +132,46 @@ const DriverAssignment = ({ route, navigation }: any) => {
       return
     }
 
+    if (!selectedDriver.id || !selectedVehicle.id) {
+      Alert.alert("Invalid Selection", "Selected driver or vehicle is missing required information")
+      return
+    }
+
     try {
       setLoading(true)
+      console.log("🔄 [DriverAssignment] Assigning vehicle to driver:", {
+        contractorId,
+        vehicleId: selectedVehicle.id,
+        driverId: selectedDriver.id,
+        feederPoints: selectedFeederPoints.length
+      })
+
       await ContractorService.assignVehicleToDriver(
         contractorId,
         selectedVehicle.id,
         selectedDriver.id,
         selectedFeederPoints
       )
-      
+
       Alert.alert("Success", "Driver assignment completed successfully")
       setAssignModalVisible(false)
       fetchData()
     } catch (error) {
-      console.error("Error assigning driver:", error)
+      console.error("❌ [DriverAssignment] Error assigning driver:", error)
       Alert.alert("Error", "Failed to assign driver. Please try again.")
     } finally {
       setLoading(false)
     }
   }
 
-  const filteredDrivers = drivers.filter(driver =>
-    driver.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    driver.email.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredDrivers = drivers.filter(driver => {
+    const fullName = driver.fullName || ""
+    const email = driver.email || ""
+    const query = searchQuery.toLowerCase()
+
+    return fullName.toLowerCase().includes(query) ||
+      email.toLowerCase().includes(query)
+  })
 
   const availableVehicles = vehicles.filter(v => !v.driverId || v.driverId === selectedDriver?.id)
 
@@ -142,8 +180,8 @@ const DriverAssignment = ({ route, navigation }: any) => {
       <View style={styles.driverContent}>
         <View style={styles.driverHeader}>
           <View style={styles.driverInfo}>
-            <Text style={styles.driverName}>{item.fullName}</Text>
-            <Text style={styles.driverEmail}>{item.email}</Text>
+            <Text style={styles.driverName}>{item.fullName || "Unknown Driver"}</Text>
+            <Text style={styles.driverEmail}>{item.email || "No email"}</Text>
             {item.phoneNumber && (
               <Text style={styles.driverPhone}>{item.phoneNumber}</Text>
             )}
@@ -166,8 +204,8 @@ const DriverAssignment = ({ route, navigation }: any) => {
           <View style={styles.assignmentRow}>
             <MaterialIcons name="local-shipping" size={16} color="#6b7280" />
             <Text style={styles.assignmentText}>
-              Vehicle: {item.assignedVehicleId ? 
-                vehicles.find(v => v.id === item.assignedVehicleId)?.vehicleNumber || "Unknown" 
+              Vehicle: {item.assignedVehicleId ?
+                vehicles.find(v => v.id === item.assignedVehicleId)?.vehicleNumber || "Unknown"
                 : "Not assigned"}
             </Text>
           </View>
@@ -206,7 +244,7 @@ const DriverAssignment = ({ route, navigation }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -293,8 +331,8 @@ const DriverAssignment = ({ route, navigation }: any) => {
 
               {selectedDriver && (
                 <View style={styles.driverSummary}>
-                  <Text style={styles.driverSummaryName}>{selectedDriver.fullName}</Text>
-                  <Text style={styles.driverSummaryEmail}>{selectedDriver.email}</Text>
+                  <Text style={styles.driverSummaryName}>{selectedDriver.fullName || "Unknown Driver"}</Text>
+                  <Text style={styles.driverSummaryEmail}>{selectedDriver.email || "No email"}</Text>
                 </View>
               )}
 
