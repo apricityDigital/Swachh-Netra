@@ -29,7 +29,11 @@ import AdminDriverAssignment from './app/screens/admin/DriverAssignment';
 import ContractorDriverConnectionTest from './app/screens/admin/ContractorDriverConnectionTest';
 import SwachhHRDashboard from './app/screens/swachh_hr/SwachhHRDashboard';
 import WorkerManagement from './app/screens/swachh_hr/WorkerManagement';
+import WorkerAssignment from './app/screens/swachh_hr/WorkerAssignment';
 import WorkerApprovals from './app/screens/admin/WorkerApprovals';
+import LocationBasedTripStart from './app/screens/driver/LocationBasedTripStart';
+import AttendanceDashboard from './app/screens/admin/AttendanceDashboard';
+import HRAttendanceDashboard from './app/screens/swachh_hr/AttendanceDashboard';
 
 
 
@@ -69,7 +73,11 @@ export default function App() {
             <Stack.Screen name='ContractorDriverConnectionTest' component={ContractorDriverConnectionTest} options={{ headerShown: false }} />
             <Stack.Screen name='SwachhHRDashboard' component={SwachhHRDashboard} options={{ headerShown: false }} />
             <Stack.Screen name='WorkerManagement' component={WorkerManagement} options={{ headerShown: false }} />
+            <Stack.Screen name='WorkerAssignment' component={WorkerAssignment} options={{ headerShown: false }} />
             <Stack.Screen name='WorkerApprovals' component={WorkerApprovals} options={{ headerShown: false }} />
+            <Stack.Screen name='LocationBasedTripStart' component={LocationBasedTripStart} options={{ headerShown: false }} />
+            <Stack.Screen name='AttendanceDashboard' component={AttendanceDashboard} options={{ headerShown: false }} />
+            <Stack.Screen name='HRAttendanceDashboard' component={HRAttendanceDashboard} options={{ headerShown: false }} />
           </Stack.Navigator>
         </NavigationContainer>
       </AuthProvider>

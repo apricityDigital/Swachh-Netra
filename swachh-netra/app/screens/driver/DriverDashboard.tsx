@@ -76,6 +76,7 @@ const DriverDashboard = ({ navigation }: any) => {
     workersPresent: 0,
     totalWorkers: 0
   })
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   useEffect(() => {
     console.log("🔄 [DriverDashboard] useEffect triggered with userData:", {
@@ -93,10 +94,10 @@ const DriverDashboard = ({ navigation }: any) => {
     }
   }, [userData])
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (forceRefresh = false) => {
     try {
       setLoading(true)
-      console.log("🚛 [DriverDashboard] Fetching dashboard data for driver:", userData?.uid)
+      console.log("🚛 [DriverDashboard] Fetching dashboard data for driver:", userData?.uid, forceRefresh ? "(FORCE REFRESH)" : "")
       console.log("👤 [DriverDashboard] Current user data:", {
         uid: userData?.uid,
         email: userData?.email,
@@ -114,6 +115,14 @@ const DriverDashboard = ({ navigation }: any) => {
       // First verify driver assignments from contractor assignments
       console.log("🔍 [DriverDashboard] Verifying driver assignments...")
       await DriverService.verifyDriverAssignments(userData.uid)
+
+      if (forceRefresh) {
+        console.log("🔄 [DriverDashboard] Force refresh - clearing any cached data...")
+        // Clear current state to show fresh data
+        setAssignedVehicle(null)
+        setAssignedFeederPoints([])
+        setContractorInfo(null)
+      }
 
       // Use enhanced method that includes daily assignments
       const data = await DriverService.getDriverDashboardDataWithDailyAssignments(userData.uid)
@@ -154,6 +163,7 @@ const DriverDashboard = ({ navigation }: any) => {
         totalWorkers: data.assignedWorkers.total
       })
 
+      setLastUpdated(new Date())
       console.log("✅ [DriverDashboard] Dashboard data loaded successfully")
     } catch (error) {
       console.error("❌ [DriverDashboard] Error fetching dashboard data:", error)
@@ -241,7 +251,7 @@ const DriverDashboard = ({ navigation }: any) => {
 
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true)
-    await fetchDashboardData()
+    await fetchDashboardData(true) // Force refresh on pull-to-refresh
     setRefreshing(false)
   }, [])
 
@@ -346,10 +356,18 @@ const DriverDashboard = ({ navigation }: any) => {
               <Text style={styles.welcomeText}>Welcome back,</Text>
               <Text style={styles.userName}>{userData?.fullName || "Driver"}</Text>
               <Text style={styles.roleText}>Driver</Text>
+              {lastUpdated && (
+                <Text style={styles.lastUpdatedText}>
+                  Updated: {lastUpdated.toLocaleTimeString()}
+                </Text>
+              )}
             </View>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity onPress={fetchDashboardData} style={styles.refreshButton}>
+            <TouchableOpacity
+              onPress={() => fetchDashboardData(true)}
+              style={styles.refreshButton}
+            >
               <MaterialIcons name="refresh" size={20} color="#6b7280" />
             </TouchableOpacity>
             <TouchableOpacity
@@ -523,21 +541,17 @@ const DriverDashboard = ({ navigation }: any) => {
               }}
               onStartTrip={(feederPoint) => {
                 console.log("Start trip for:", feederPoint.feederPointName)
-                // Navigate to trip start screen
-                Alert.alert(
-                  "Start Trip",
-                  `Start collection trip for ${feederPoint.feederPointName}?`,
-                  [
-                    { text: "Cancel", style: "cancel" },
-                    {
-                      text: "Start",
-                      onPress: () => {
-                        // TODO: Implement trip start logic
-                        console.log("Starting trip for:", feederPoint.feederPointName)
-                      }
-                    }
-                  ]
-                )
+                // Navigate to location-based trip start screen
+                if (!assignedVehicle) {
+                  Alert.alert("No Vehicle Assigned", "Please contact your contractor to assign a vehicle.")
+                  return
+                }
+
+                navigation.navigate('LocationBasedTripStart', {
+                  feederPoint,
+                  vehicleId: assignedVehicle.id,
+                  vehicleNumber: assignedVehicle.vehicleNumber
+                })
               }}
               showSearch={true}
               showGrouping={true}
@@ -818,6 +832,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#9ca3af",
     fontWeight: "500",
+    marginTop: 2,
+  },
+  lastUpdatedText: {
+    fontSize: 10,
+    color: "#9ca3af",
+    fontStyle: "italic",
     marginTop: 2,
   },
   headerActions: {

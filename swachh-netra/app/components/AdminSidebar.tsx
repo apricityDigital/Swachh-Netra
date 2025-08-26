@@ -135,7 +135,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
     {
       id: "assignments",
       title: "Assignment Management",
-      icon: "assignment",
+      icon: "work",
       items: [
         {
           id: "driver-assignments",
@@ -147,14 +147,14 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
         {
           id: "point-assignments",
           title: "Point Assignments",
-          icon: "assignment",
+          icon: "location-on",
           screen: "FeederPointAssignment",
           description: "Assign points to contractors"
         },
         {
           id: "vehicle-assignments",
           title: "Vehicle Assignments",
-          icon: "assignment-ind",
+          icon: "directions-car",
           screen: "VehicleAssignment",
           description: "Assign vehicles to contractors"
         },
@@ -164,6 +164,13 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           icon: "link",
           screen: "ContractorDriverConnectionTest",
           description: "Test contractor-driver connections"
+        },
+        {
+          id: "attendance-dashboard",
+          title: "Attendance Dashboard",
+          icon: "event-available",
+          screen: "AttendanceDashboard",
+          description: "View worker attendance records"
         }
       ]
     },

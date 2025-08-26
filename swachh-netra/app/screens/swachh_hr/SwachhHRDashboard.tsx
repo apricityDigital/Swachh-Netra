@@ -44,12 +44,20 @@ const SwachhHRDashboard = ({ navigation }: any) => {
       screen: "WorkerManagement",
     },
     {
-      title: "Attendance Tracking",
-      description: "Track daily attendance",
-      icon: "schedule",
+      title: "Worker Assignment",
+      description: "Assign workers to feeder points",
+      icon: "person-add",
+      color: "#059669",
+      bgColor: "#f0fdf4",
+      screen: "WorkerAssignment",
+    },
+    {
+      title: "Attendance Dashboard",
+      description: "View worker attendance records",
+      icon: "event-available",
       color: "#10b981",
       bgColor: "#f0fdf4",
-      screen: "AttendanceTracking",
+      screen: "HRAttendanceDashboard",
     },
     {
       title: "Performance Reports",
@@ -146,6 +154,9 @@ const SwachhHRDashboard = ({ navigation }: any) => {
     switch (screen) {
       case "WorkerManagement":
         navigation.navigate("WorkerManagement")
+        break
+      case "WorkerAssignment":
+        navigation.navigate("WorkerAssignment")
         break
       case "AttendanceTracking":
       case "PerformanceReports":

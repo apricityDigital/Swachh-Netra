@@ -130,11 +130,20 @@ const DriverAssignment = ({ route, navigation }: any) => {
   }
 
   const handleFeederPointToggle = (feederPointId: string) => {
-    setSelectedFeederPoints(prev =>
-      prev.includes(feederPointId)
+    setSelectedFeederPoints(prev => {
+      const newSelection = prev.includes(feederPointId)
         ? prev.filter(id => id !== feederPointId)
         : [...prev, feederPointId]
-    )
+
+      console.log("🔄 [DriverAssignment] Feeder point selection changed:", {
+        feederPointId,
+        wasSelected: prev.includes(feederPointId),
+        newSelection,
+        totalSelected: newSelection.length
+      })
+
+      return newSelection
+    })
   }
 
   // Simple Team Planning functions
@@ -318,7 +327,7 @@ const DriverAssignment = ({ route, navigation }: any) => {
       <View style={styles.driverContent}>
         <View style={styles.driverHeader}>
           <View style={styles.driverInfo}>
-            <Text style={styles.driverName}>{item.fullName || "Unknown Driver"}</Text>
+            <Text style={styles.driverName}>{item.fullName || item.displayName || item.name || "Unknown Driver"}</Text>
             <Text style={styles.driverEmail}>{item.email || "No email"}</Text>
             {item.phoneNumber && (
               <Text style={styles.driverPhone}>{item.phoneNumber}</Text>
@@ -360,7 +369,7 @@ const DriverAssignment = ({ route, navigation }: any) => {
             style={styles.assignButton}
             onPress={() => handleAssignDriver(item)}
           >
-            <MaterialIcons name="assignment-ind" size={20} color="#2563eb" />
+            <MaterialIcons name="person-add" size={20} color="#2563eb" />
             <Text style={styles.assignButtonText}>
               {item.assignedVehicleId ? "Reassign" : "Assign"}
             </Text>
@@ -373,7 +382,7 @@ const DriverAssignment = ({ route, navigation }: any) => {
   if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
-        <MaterialIcons name="assignment-ind" size={48} color="#2563eb" />
+        <MaterialIcons name="person-add" size={48} color="#2563eb" />
         <Text style={styles.loadingText}>Loading Driver Assignments...</Text>
       </View>
     )
@@ -484,7 +493,7 @@ const DriverAssignment = ({ route, navigation }: any) => {
 
               {selectedDriver && (
                 <View style={styles.driverSummary}>
-                  <Text style={styles.driverSummaryName}>{selectedDriver.fullName || "Unknown Driver"}</Text>
+                  <Text style={styles.driverSummaryName}>{selectedDriver.fullName || selectedDriver.displayName || selectedDriver.name || "Unknown Driver"}</Text>
                   <Text style={styles.driverSummaryEmail}>{selectedDriver.email || "No email"}</Text>
                 </View>
               )}

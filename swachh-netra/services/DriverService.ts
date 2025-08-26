@@ -551,6 +551,48 @@ export class DriverService {
     )
     unsubscribers.push(unsubscribeDailyAssignments)
 
+    // Listen to driver assignment changes (contractor assignments)
+    const driverAssignmentsQuery = query(
+      collection(FIRESTORE_DB, "driverAssignments"),
+      where("driverId", "==", driverId),
+      where("status", "==", "active")
+    )
+    const unsubscribeDriverAssignments = onSnapshot(driverAssignmentsQuery, () => {
+      console.log("📡 [DriverService] Driver assignments changed, refreshing data...")
+      this.getDriverDashboardDataWithDailyAssignments(driverId)
+        .then(callback)
+        .catch(console.error)
+    })
+    unsubscribers.push(unsubscribeDriverAssignments)
+
+    // Listen to vehicle assignment changes
+    const vehicleAssignmentsQuery = query(
+      collection(FIRESTORE_DB, "vehicleAssignments"),
+      where("driverId", "==", driverId),
+      where("status", "==", "active")
+    )
+    const unsubscribeVehicleAssignments = onSnapshot(vehicleAssignmentsQuery, () => {
+      console.log("📡 [DriverService] Vehicle assignments changed, refreshing data...")
+      this.getDriverDashboardDataWithDailyAssignments(driverId)
+        .then(callback)
+        .catch(console.error)
+    })
+    unsubscribers.push(unsubscribeVehicleAssignments)
+
+    // Listen to feeder point assignment changes
+    const feederPointAssignmentsQuery = query(
+      collection(FIRESTORE_DB, "feederPointAssignments"),
+      where("driverId", "==", driverId),
+      where("status", "==", "active")
+    )
+    const unsubscribeFeederPointAssignments = onSnapshot(feederPointAssignmentsQuery, () => {
+      console.log("📡 [DriverService] Feeder point assignments changed, refreshing data...")
+      this.getDriverDashboardDataWithDailyAssignments(driverId)
+        .then(callback)
+        .catch(console.error)
+    })
+    unsubscribers.push(unsubscribeFeederPointAssignments)
+
     // Return cleanup function
     return () => {
       console.log("🔄 [DriverService] Cleaning up real-time listeners")

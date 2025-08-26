@@ -317,7 +317,7 @@ const DriverAssignmentScreen = ({ navigation }: any) => {
                 <Text style={styles.statLabel}>Total Drivers</Text>
               </View>
               <View style={styles.statItem}>
-                <MaterialIcons name="assignment-ind" size={24} color="#10b981" />
+                <MaterialIcons name="person-add" size={24} color="#10b981" />
                 <Text style={styles.statNumber}>{stats.assigned}</Text>
                 <Text style={styles.statLabel}>Assigned</Text>
               </View>

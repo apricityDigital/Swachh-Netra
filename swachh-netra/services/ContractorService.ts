@@ -15,6 +15,7 @@ import {
   writeBatch,
 } from "firebase/firestore"
 import { FIRESTORE_DB } from "../FirebaseConfig"
+import { DailyAssignmentService } from "./DailyAssignmentService"
 import { FeederPointService, FeederPoint, FeederPointAssignment } from "./FeederPointService"
 
 // Enhanced interfaces for contractor operations
@@ -511,6 +512,32 @@ export class ContractorService {
         updatedAt: serverTimestamp(),
       })
 
+      // Create/update vehicle assignment record
+      const vehicleAssignmentRef = doc(collection(FIRESTORE_DB, "vehicleAssignments"))
+      const vehicleAssignment = {
+        vehicleId,
+        driverId,
+        contractorId,
+        assignedAt: serverTimestamp(),
+        status: "active",
+        updatedAt: serverTimestamp()
+      }
+      batch.set(vehicleAssignmentRef, vehicleAssignment)
+
+      // Create feeder point assignment records
+      for (const feederPointId of feederPointIds) {
+        const feederPointAssignmentRef = doc(collection(FIRESTORE_DB, "feederPointAssignments"))
+        const feederPointAssignment = {
+          feederPointId,
+          driverId,
+          contractorId,
+          assignedAt: serverTimestamp(),
+          status: "active",
+          updatedAt: serverTimestamp()
+        }
+        batch.set(feederPointAssignmentRef, feederPointAssignment)
+      }
+
       // Update driver with assigned vehicle
       const driverRef = doc(FIRESTORE_DB, "users", driverId)
       batch.update(driverRef, {
@@ -522,6 +549,80 @@ export class ContractorService {
 
       await batch.commit()
       console.log("✅ [ContractorService] Vehicle assignment completed successfully")
+
+      // Create daily assignment for today
+      try {
+        const today = new Date().toISOString().split('T')[0]
+        const driverData = driverDoc.data()
+        const driverName = driverData.fullName || driverData.displayName || driverData.name || "Unknown Driver"
+
+        console.log("🔄 [ContractorService] Creating daily assignment for today:", {
+          driverId,
+          driverName,
+          date: today,
+          feederPointIds: feederPointIds.length,
+          feederPointList: feederPointIds
+        })
+
+        // Clean up any existing daily assignments for today first
+        console.log("🧹 [ContractorService] Cleaning up existing daily assignments for today...")
+        const existingDailyQuery = query(
+          collection(FIRESTORE_DB, "dailyAssignments"),
+          where("driverId", "==", driverId),
+          where("assignmentDate", "==", today)
+        )
+        const existingDailySnapshot = await getDocs(existingDailyQuery)
+
+        for (const docSnapshot of existingDailySnapshot.docs) {
+          console.log("🗑️ [ContractorService] Deleting old daily assignment:", docSnapshot.id)
+          await deleteDoc(docSnapshot.ref)
+        }
+
+        // Clean up existing feeder point assignments
+        console.log("🧹 [ContractorService] Cleaning up existing feeder point assignments...")
+        const existingFPQuery = query(
+          collection(FIRESTORE_DB, "feederPointAssignments"),
+          where("driverId", "==", driverId),
+          where("status", "==", "active")
+        )
+        const existingFPSnapshot = await getDocs(existingFPQuery)
+
+        for (const docSnapshot of existingFPSnapshot.docs) {
+          console.log("🗑️ [ContractorService] Deleting old feeder point assignment:", docSnapshot.id)
+          await deleteDoc(docSnapshot.ref)
+        }
+
+        // Create new daily assignment
+        console.log("🔄 [ContractorService] Creating new daily assignment")
+        await DailyAssignmentService.createOrUpdateAssignment({
+          driverId,
+          driverName,
+          vehicleId,
+          feederPointIds,
+          assignmentDate: today,
+          shiftType: "morning",
+          assignedBy: contractorId,
+          contractorId
+        })
+
+        console.log("✅ [ContractorService] Daily assignment created/updated successfully")
+
+        // Verify the daily assignment was created
+        const verifyAssignment = await DailyAssignmentService.getTodayAssignment(driverId)
+        console.log("🔍 [ContractorService] Daily assignment verification:", {
+          found: verifyAssignment.found,
+          feederPointCount: verifyAssignment.feederPointCount,
+          assignmentId: verifyAssignment.assignmentId
+        })
+
+      } catch (dailyAssignmentError) {
+        console.error("❌ [ContractorService] Failed to create daily assignment:", dailyAssignmentError)
+        console.error("❌ [ContractorService] Daily assignment error details:", {
+          message: dailyAssignmentError.message,
+          stack: dailyAssignmentError.stack
+        })
+        // Don't throw error here as the main assignment was successful
+      }
 
     } catch (error) {
       console.error("❌ [ContractorService] Error assigning vehicle to driver:", error)
