@@ -242,8 +242,16 @@ export class DriverService {
 
       for (const fpId of driverData.assignedFeederPointIds) {
         try {
+          console.log(`🔍 [DriverService] Fetching feeder point details for: ${fpId}`)
           const feederPoint = await FeederPointService.getFeederPointById(fpId)
           if (feederPoint) {
+            console.log(`✅ [DriverService] Feeder point found:`, {
+              id: feederPoint.id,
+              name: feederPoint.feederPointName,
+              area: feederPoint.areaName,
+              ward: feederPoint.wardNumber
+            })
+
             // Get today's trip count for this feeder point
             const completedTrips = await this.getTodayCompletedTrips(driverId, fpId)
 
@@ -259,6 +267,8 @@ export class DriverService {
               nextTripTime: this.calculateNextTripTime(completedTrips),
               estimatedDuration: 45 // minutes per trip
             })
+          } else {
+            console.warn(`⚠️ [DriverService] Feeder point not found: ${fpId}`)
           }
         } catch (error) {
           console.error(`❌ [DriverService] Error fetching feeder point ${fpId}:`, error)
@@ -593,6 +603,20 @@ export class DriverService {
     })
     unsubscribers.push(unsubscribeFeederPointAssignments)
 
+    // Listen to daily assignment document changes (additional listener)
+    const dailyAssignmentsQuery = query(
+      collection(FIRESTORE_DB, "dailyAssignments"),
+      where("driverId", "==", driverId),
+      where("status", "==", "active")
+    )
+    const unsubscribeDailyAssignmentsDirect = onSnapshot(dailyAssignmentsQuery, () => {
+      console.log("📡 [DriverService] Daily assignments document changed, refreshing data...")
+      this.getDriverDashboardDataWithDailyAssignments(driverId)
+        .then(callback)
+        .catch(console.error)
+    })
+    unsubscribers.push(unsubscribeDailyAssignmentsDirect)
+
     // Return cleanup function
     return () => {
       console.log("🔄 [DriverService] Cleaning up real-time listeners")
@@ -701,14 +725,19 @@ export class DriverService {
       }
 
       // Get feeder point details
+      console.log(`🔍 [DriverService] Fetching details for ${todayAssignment.feederPointIds.length} feeder points`)
       const feederPointsData = await Promise.all(
         todayAssignment.feederPointIds.map(async (fpId) => {
           try {
-            const fpDoc = await getDoc(doc(FIRESTORE_DB, "feederPoints", fpId))
-            if (fpDoc.exists()) {
-              return { id: fpDoc.id, ...fpDoc.data() } as FeederPoint
+            console.log(`🔍 [DriverService] Fetching feeder point: ${fpId}`)
+            const feederPoint = await FeederPointService.getFeederPointById(fpId)
+            if (feederPoint) {
+              console.log(`✅ [DriverService] Feeder point found: ${feederPoint.feederPointName}`)
+              return feederPoint
+            } else {
+              console.warn(`⚠️ [DriverService] Feeder point not found: ${fpId}`)
+              return null
             }
-            return null
           } catch (error) {
             console.error(`❌ [DriverService] Error fetching feeder point ${fpId}:`, error)
             return null
@@ -757,7 +786,7 @@ export class DriverService {
           estimatedDuration: 45, // Default 45 minutes per trip
           priority: this.calculatePriority(index, validFeederPoints.length),
           status: completedTrips >= totalTrips ? "completed" :
-                 completedTrips > 0 ? "in_progress" : "pending"
+            completedTrips > 0 ? "in_progress" : "pending"
         }
       })
 

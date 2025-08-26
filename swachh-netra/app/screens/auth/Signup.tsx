@@ -324,7 +324,7 @@ const Signup = () => {
                                 {
                                     rotate: logoRotateAnim.interpolate({
                                         inputRange: [0, 1],
-                                        outputRange: ['0deg', '360deg'],
+                                        outputRange: ['0deg', '0deg'],
                                     }),
                                 },
                             ],

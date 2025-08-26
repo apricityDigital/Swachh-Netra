@@ -550,6 +550,21 @@ export class ContractorService {
       await batch.commit()
       console.log("✅ [ContractorService] Vehicle assignment completed successfully")
 
+      // Force refresh driver data to ensure immediate sync
+      console.log("🔄 [ContractorService] Triggering driver data refresh...")
+      try {
+        // Trigger a manual refresh of the driver's data
+        const driverDoc = await getDoc(doc(FIRESTORE_DB, "users", driverId))
+        if (driverDoc.exists()) {
+          // Update the driver document to trigger real-time listeners
+          await updateDoc(doc(FIRESTORE_DB, "users", driverId), {
+            lastAssignmentUpdate: serverTimestamp()
+          })
+        }
+      } catch (refreshError) {
+        console.error("⚠️ [ContractorService] Error triggering driver refresh:", refreshError)
+      }
+
       // Create daily assignment for today
       try {
         const today = new Date().toISOString().split('T')[0]
@@ -610,10 +625,27 @@ export class ContractorService {
         // Verify the daily assignment was created
         const verifyAssignment = await DailyAssignmentService.getTodayAssignment(driverId)
         console.log("🔍 [ContractorService] Daily assignment verification:", {
-          found: verifyAssignment.found,
-          feederPointCount: verifyAssignment.feederPointCount,
-          assignmentId: verifyAssignment.assignmentId
+          found: !!verifyAssignment,
+          feederPointCount: verifyAssignment?.feederPointIds?.length || 0,
+          assignmentId: verifyAssignment?.id
         })
+
+        // Ensure feeder point data is immediately available
+        if (verifyAssignment && verifyAssignment.feederPointIds.length > 0) {
+          console.log("🔄 [ContractorService] Pre-loading feeder point data...")
+          for (const fpId of verifyAssignment.feederPointIds) {
+            try {
+              const fpData = await FeederPointService.getFeederPointById(fpId)
+              if (fpData) {
+                console.log(`✅ [ContractorService] Feeder point ${fpId} data verified: ${fpData.feederPointName}`)
+              } else {
+                console.warn(`⚠️ [ContractorService] Feeder point ${fpId} not found`)
+              }
+            } catch (error) {
+              console.error(`❌ [ContractorService] Error verifying feeder point ${fpId}:`, error)
+            }
+          }
+        }
 
       } catch (dailyAssignmentError) {
         console.error("❌ [ContractorService] Failed to create daily assignment:", dailyAssignmentError)

@@ -49,36 +49,36 @@ const EnhancedFeederPointsList = ({
   // Filter and group feeder points
   const { filteredPoints, groupedPoints } = useMemo(() => {
     let filtered = feederPoints.filter(fp => {
-      const matchesSearch = fp.feederPointName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           fp.areaName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           fp.wardNumber.includes(searchQuery)
-      
-      const status = fp.completedTrips >= fp.totalTrips ? "completed" : 
-                    fp.completedTrips > 0 ? "in_progress" : "pending"
-      
-      const matchesFilter = selectedFilter === "all" || 
-                           (selectedFilter === "pending" && status === "pending") ||
-                           (selectedFilter === "in_progress" && status === "in_progress") ||
-                           (selectedFilter === "completed" && status === "completed")
-      
+      const matchesSearch = (fp.feederPointName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (fp.areaName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (fp.wardNumber || '').includes(searchQuery)
+
+      const status = fp.completedTrips >= fp.totalTrips ? "completed" :
+        fp.completedTrips > 0 ? "in_progress" : "pending"
+
+      const matchesFilter = selectedFilter === "all" ||
+        (selectedFilter === "pending" && status === "pending") ||
+        (selectedFilter === "in_progress" && status === "in_progress") ||
+        (selectedFilter === "completed" && status === "completed")
+
       return matchesSearch && matchesFilter
     })
 
     // Group points if needed
     let grouped: { [key: string]: AssignedFeederPoint[] } = {}
-    
+
     if (groupBy === "none") {
       grouped["all"] = filtered
     } else if (groupBy === "ward") {
       filtered.forEach(fp => {
-        const key = `Ward ${fp.wardNumber}`
+        const key = `Ward ${fp.wardNumber || 'Unknown'}`
         if (!grouped[key]) grouped[key] = []
         grouped[key].push(fp)
       })
     } else if (groupBy === "status") {
       filtered.forEach(fp => {
-        const status = fp.completedTrips >= fp.totalTrips ? "Completed" : 
-                      fp.completedTrips > 0 ? "In Progress" : "Pending"
+        const status = fp.completedTrips >= fp.totalTrips ? "Completed" :
+          fp.completedTrips > 0 ? "In Progress" : "Pending"
         if (!grouped[status]) grouped[status] = []
         grouped[status].push(fp)
       })
@@ -122,20 +122,20 @@ const EnhancedFeederPointsList = ({
     >
       <View style={styles.compactContent}>
         <View style={styles.compactHeader}>
-          <MaterialIcons 
-            name={getStatusIcon(item)} 
-            size={16} 
-            color={getStatusColor(item)} 
+          <MaterialIcons
+            name={getStatusIcon(item)}
+            size={16}
+            color={getStatusColor(item)}
           />
           <Text style={styles.compactName} numberOfLines={1}>
-            {item.feederPointName}
+            {item.feederPointName || 'Unknown Location'}
           </Text>
           <Text style={styles.compactProgress}>
-            {item.completedTrips}/{item.totalTrips}
+            {item.completedTrips || 0}/{item.totalTrips || 0}
           </Text>
         </View>
         <Text style={styles.compactArea} numberOfLines={1}>
-          {item.areaName}, Ward {item.wardNumber}
+          {item.areaName || 'Unknown Area'}, Ward {item.wardNumber || 'N/A'}
         </Text>
         {item.priority && (
           <View style={[styles.priorityDot, { backgroundColor: getPriorityColor(item.priority) }]} />
@@ -151,9 +151,9 @@ const EnhancedFeederPointsList = ({
           <View style={styles.feederPointHeader}>
             <View style={styles.feederPointTitleRow}>
               <MaterialIcons name="location-on" size={20} color="#3b82f6" />
-              <Text style={styles.feederPointName}>{item.feederPointName}</Text>
+              <Text style={styles.feederPointName}>{item.feederPointName || 'Unknown Location'}</Text>
               {item.priority && (
-                <Chip 
+                <Chip
                   style={[styles.priorityChip, { backgroundColor: `${getPriorityColor(item.priority)}20` }]}
                   textStyle={[styles.priorityChipText, { color: getPriorityColor(item.priority) }]}
                 >
@@ -162,20 +162,20 @@ const EnhancedFeederPointsList = ({
               )}
             </View>
             <View style={styles.tripProgress}>
-              <MaterialIcons 
-                name={getStatusIcon(item)} 
-                size={20} 
-                color={getStatusColor(item)} 
+              <MaterialIcons
+                name={getStatusIcon(item)}
+                size={20}
+                color={getStatusColor(item)}
               />
-              <Text style={styles.tripCount}>{item.completedTrips}/{item.totalTrips}</Text>
+              <Text style={styles.tripCount}>{item.completedTrips || 0}/{item.totalTrips || 0}</Text>
             </View>
           </View>
-          
-          <Text style={styles.feederPointArea}>{item.areaName}, Ward {item.wardNumber}</Text>
-          <Text style={styles.feederPointLandmark}>📍 {item.nearestLandmark}</Text>
-          
+
+          <Text style={styles.feederPointArea}>{item.areaName || 'Unknown Area'}, Ward {item.wardNumber || 'N/A'}</Text>
+          <Text style={styles.feederPointLandmark}>📍 {item.nearestLandmark || 'No landmark specified'}</Text>
+
           <View style={styles.feederPointStats}>
-            <Text style={styles.householdsText}>~{item.approximateHouseholds} households</Text>
+            <Text style={styles.householdsText}>~{item.approximateHouseholds || 'Unknown'} households</Text>
             {item.nextTripTime && item.completedTrips < item.totalTrips && (
               <Text style={styles.nextTripTime}>Next: {item.nextTripTime}</Text>
             )}
@@ -204,19 +204,19 @@ const EnhancedFeederPointsList = ({
       onPress={() => onFeederPointPress?.(item)}
     >
       <View style={styles.gridContent}>
-        <MaterialIcons 
-          name={getStatusIcon(item)} 
-          size={24} 
-          color={getStatusColor(item)} 
+        <MaterialIcons
+          name={getStatusIcon(item)}
+          size={24}
+          color={getStatusColor(item)}
         />
         <Text style={styles.gridName} numberOfLines={2}>
-          {item.feederPointName}
+          {item.feederPointName || 'Unknown Location'}
         </Text>
         <Text style={styles.gridArea} numberOfLines={1}>
-          Ward {item.wardNumber}
+          Ward {item.wardNumber || 'N/A'}
         </Text>
         <Text style={styles.gridProgress}>
-          {item.completedTrips}/{item.totalTrips}
+          {item.completedTrips || 0}/{item.totalTrips || 0}
         </Text>
         {item.priority && (
           <View style={[styles.gridPriorityDot, { backgroundColor: getPriorityColor(item.priority) }]} />
@@ -318,10 +318,10 @@ const EnhancedFeederPointsList = ({
               ]}
               onPress={() => setViewMode(mode as any)}
             >
-              <MaterialIcons 
-                name={mode === "list" ? "view-list" : mode === "compact" ? "view-agenda" : "view-module"} 
-                size={20} 
-                color={viewMode === mode ? "#ffffff" : "#6b7280"} 
+              <MaterialIcons
+                name={mode === "list" ? "view-list" : mode === "compact" ? "view-agenda" : "view-module"}
+                size={20}
+                color={viewMode === mode ? "#ffffff" : "#6b7280"}
               />
             </TouchableOpacity>
           ))}

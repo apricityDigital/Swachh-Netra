@@ -186,12 +186,22 @@ const DriverDashboard = ({ navigation }: any) => {
           hasVehicle: !!data.assignedVehicle,
           vehicleId: data.assignedVehicle?.id,
           feederPointsCount: data.assignedFeederPoints.length,
-          hasContractor: !!data.contractorInfo
+          hasContractor: !!data.contractorInfo,
+          feederPointDetails: data.assignedFeederPoints.slice(0, 3).map(fp => ({
+            id: fp.id,
+            name: fp.feederPointName,
+            area: fp.areaName
+          }))
         })
         setDashboardData(data)
         setAssignedVehicle(data.assignedVehicle)
         setAssignedFeederPoints(data.assignedFeederPoints)
         setContractorInfo(data.contractorInfo)
+
+        // If we received valid feeder point data, stop loading
+        if (data.assignedFeederPoints.length > 0 && data.assignedFeederPoints[0].feederPointName) {
+          setLoading(false)
+        }
         setTodayStats({
           totalTrips: data.todayTrips.total,
           completedTrips: data.todayTrips.completed,
@@ -383,17 +393,19 @@ const DriverDashboard = ({ navigation }: any) => {
                   "Debug Info",
                   `Driver ID: ${userData?.uid}\nRoutes: ${assignedFeederPoints.length}\nVehicle: ${assignedVehicle?.vehicleNumber || "None"}\nContractor: ${contractorInfo?.name || "None"}`,
                   [
-                    { text: "Refresh", onPress: fetchDashboardData },
-                    { text: "Test Daily Assignment", onPress: async () => {
-                      if (userData?.uid) {
-                        try {
-                          const todayAssignment = await DriverService.getTodayDailyAssignment(userData.uid)
-                          Alert.alert("Daily Assignment Test", `Found ${todayAssignment.length} routes for today`)
-                        } catch (error) {
-                          Alert.alert("Error", `Failed to test: ${error}`)
+                    { text: "Refresh", onPress: () => fetchDashboardData(true) },
+                    {
+                      text: "Test Daily Assignment", onPress: async () => {
+                        if (userData?.uid) {
+                          try {
+                            const todayAssignment = await DriverService.getTodayDailyAssignment(userData.uid)
+                            Alert.alert("Daily Assignment Test", `Found ${todayAssignment.length} routes for today`)
+                          } catch (error) {
+                            Alert.alert("Error", `Failed to test: ${error}`)
+                          }
                         }
                       }
-                    }},
+                    },
                     { text: "OK" }
                   ]
                 )
@@ -684,7 +696,7 @@ const DriverDashboard = ({ navigation }: any) => {
                   "Connection Status",
                   statusMessage,
                   [
-                    { text: "Refresh Data", onPress: fetchDashboardData },
+                    { text: "Refresh Data", onPress: () => fetchDashboardData(true) },
                     { text: "OK" }
                   ]
                 )
@@ -716,7 +728,7 @@ const DriverDashboard = ({ navigation }: any) => {
                 "Debug Info",
                 `Driver ID: ${userData?.uid}\nEmail: ${userData?.email}\nVehicle: ${assignedVehicle?.vehicleNumber || "None"}\nRoutes: ${assignedFeederPoints.length}\nContractor: ${contractorInfo?.name || "None"}`,
                 [
-                  { text: "Refresh Data", onPress: fetchDashboardData },
+                  { text: "Refresh Data", onPress: () => fetchDashboardData(true) },
                   { text: "OK" }
                 ]
               )

@@ -2,6 +2,7 @@ import {
   collection,
   addDoc,
   getDocs,
+  getDoc,
   doc,
   updateDoc,
   deleteDoc,
@@ -73,12 +74,12 @@ export class FeederPointService {
       const feederPointsRef = collection(FIRESTORE_DB, "feederPoints")
       const q = query(feederPointsRef, where("isActive", "==", true), orderBy("createdAt", "desc"))
       const querySnapshot = await getDocs(q)
-      
+
       const feederPoints: FeederPoint[] = []
       querySnapshot.forEach((doc) => {
         feederPoints.push({ id: doc.id, ...doc.data() } as FeederPoint)
       })
-      
+
       return feederPoints
     } catch (error) {
       console.error("Error fetching feeder points:", error)
@@ -88,19 +89,27 @@ export class FeederPointService {
 
   static async getFeederPointById(id: string): Promise<FeederPoint | null> {
     try {
-      const feederPointsRef = collection(FIRESTORE_DB, "feederPoints")
-      const q = query(feederPointsRef, where("__name__", "==", id))
-      const querySnapshot = await getDocs(q)
-      
-      if (!querySnapshot.empty) {
-        const doc = querySnapshot.docs[0]
-        return { id: doc.id, ...doc.data() } as FeederPoint
+      console.log(`🔍 [FeederPointService] Fetching feeder point by ID: ${id}`)
+
+      const feederPointRef = doc(FIRESTORE_DB, "feederPoints", id)
+      const feederPointDoc = await getDoc(feederPointRef)
+
+      if (feederPointDoc.exists()) {
+        const data = feederPointDoc.data()
+        console.log(`✅ [FeederPointService] Feeder point found:`, {
+          id: feederPointDoc.id,
+          feederPointName: data?.feederPointName,
+          areaName: data?.areaName,
+          wardNumber: data?.wardNumber
+        })
+        return { id: feederPointDoc.id, ...data } as FeederPoint
+      } else {
+        console.log(`❌ [FeederPointService] Feeder point not found: ${id}`)
+        return null
       }
-      
-      return null
     } catch (error) {
-      console.error("Error fetching feeder point:", error)
-      throw new Error("Failed to fetch feeder point")
+      console.error(`❌ [FeederPointService] Error fetching feeder point ${id}:`, error)
+      return null
     }
   }
 
@@ -150,12 +159,12 @@ export class FeederPointService {
       const assignmentsRef = collection(FIRESTORE_DB, "feederPointAssignments")
       const q = query(assignmentsRef, orderBy("assignedAt", "desc"))
       const querySnapshot = await getDocs(q)
-      
+
       const assignments: FeederPointAssignment[] = []
       querySnapshot.forEach((doc) => {
         assignments.push({ id: doc.id, ...doc.data() } as FeederPointAssignment)
       })
-      
+
       return assignments
     } catch (error) {
       console.error("Error fetching assignments:", error)
@@ -168,12 +177,12 @@ export class FeederPointService {
       const assignmentsRef = collection(FIRESTORE_DB, "feederPointAssignments")
       const q = query(assignmentsRef, where("status", "==", "active"), orderBy("assignedAt", "desc"))
       const querySnapshot = await getDocs(q)
-      
+
       const assignments: FeederPointAssignment[] = []
       querySnapshot.forEach((doc) => {
         assignments.push({ id: doc.id, ...doc.data() } as FeederPointAssignment)
       })
-      
+
       return assignments
     } catch (error) {
       console.error("Error fetching active assignments:", error)
@@ -293,7 +302,7 @@ export class FeederPointService {
         this.getAllFeederPoints(),
         this.getActiveAssignments()
       ])
-      
+
       const assignedFeederPointIds = new Set(assignments.map(a => a.feederPointId))
       return feederPoints.filter(fp => !assignedFeederPointIds.has(fp.id!))
     } catch (error) {
@@ -308,9 +317,9 @@ export class FeederPointService {
         this.getActiveAssignments(),
         this.getAllFeederPoints()
       ])
-      
+
       const feederPointMap = new Map(feederPoints.map(fp => [fp.id!, fp]))
-      
+
       return assignments.map(assignment => ({
         ...assignment,
         feederPoint: feederPointMap.get(assignment.feederPointId)
@@ -325,18 +334,18 @@ export class FeederPointService {
     try {
       const feederPointsRef = collection(FIRESTORE_DB, "feederPoints")
       const q = query(
-        feederPointsRef, 
+        feederPointsRef,
         where("wardNumber", "==", wardNumber),
         where("isActive", "==", true),
         orderBy("createdAt", "desc")
       )
       const querySnapshot = await getDocs(q)
-      
+
       const feederPoints: FeederPoint[] = []
       querySnapshot.forEach((doc) => {
         feederPoints.push({ id: doc.id, ...doc.data() } as FeederPoint)
       })
-      
+
       return feederPoints
     } catch (error) {
       console.error("Error fetching feeder points by ward:", error)
@@ -356,9 +365,9 @@ export class FeederPointService {
         this.getAllFeederPoints(),
         this.getAllAssignments()
       ])
-      
+
       const activeAssignments = assignments.filter(a => a.status === "active")
-      
+
       return {
         totalFeederPoints: feederPoints.length,
         assignedFeederPoints: activeAssignments.length,

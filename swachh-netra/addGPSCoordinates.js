@@ -1,14 +1,37 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore, doc, updateDoc } from 'firebase/firestore';
+const { initializeApp } = require('firebase/app');
+const { getFirestore, doc, updateDoc, collection, getDocs } = require('firebase/firestore');
+const dotenv = require('dotenv');
 
-// Firebase config
+// Load environment variables
+dotenv.config();
+
+// Validate environment variables
+const requiredEnvVars = [
+  'EXPO_PUBLIC_FIREBASE_API_KEY',
+  'EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN',
+  'EXPO_PUBLIC_FIREBASE_PROJECT_ID',
+  'EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET',
+  'EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+  'EXPO_PUBLIC_FIREBASE_APP_ID'
+];
+
+console.log('🔍 Checking environment variables...');
+for (const envVar of requiredEnvVars) {
+  if (!process.env[envVar]) {
+    console.error(`❌ Missing environment variable: ${envVar}`);
+    process.exit(1);
+  }
+}
+console.log('✅ All required environment variables found');
+
+// Firebase config from environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyBJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJJ",
-  authDomain: "swachh-netra-3e12e.firebaseapp.com",
-  projectId: "swachh-netra-3e12e",
-  storageBucket: "swachh-netra-3e12e.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdefghijklmnop"
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID
 };
 
 // Initialize Firebase
@@ -17,62 +40,90 @@ const db = getFirestore(app);
 
 async function addGPSCoordinates() {
   try {
-    console.log('🗺️ Adding GPS coordinates to feeder points...');
+    console.log('🗺️ Fetching feeder points from database and adding GPS coordinates...');
 
-    // Add GPS coordinates to "Hms solaris" feeder point
-    // Using coordinates for a location in Udaipur (example coordinates)
-    const hmsolarisId = "ckkvQy6Z77ijqSXEUk5s";
-    await updateDoc(doc(db, "feederPoints", hmsolarisId), {
-      gpsCoordinates: {
-        latitude: 24.5854,  // Udaipur latitude
-        longitude: 73.7125, // Udaipur longitude
-        accuracy: 10
-      },
-      updatedAt: new Date()
-    });
+    // Validate Firebase configuration
+    if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+      throw new Error('Firebase configuration is missing. Please check your .env file.');
+    }
 
-    console.log('✅ Added GPS coordinates to Hms solaris feeder point');
+    console.log(`🔗 Connected to Firebase project: ${firebaseConfig.projectId}`);
 
-    // Add GPS coordinates to "Ramganj" feeder point
-    const ramganjId = "2lo7dZ1q50O6gGqe0oKn";
-    await updateDoc(doc(db, "feederPoints", ramganjId), {
-      gpsCoordinates: {
-        latitude: 24.5900,  // Slightly different coordinates
-        longitude: 73.7200,
-        accuracy: 10
-      },
-      updatedAt: new Date()
-    });
+    // Fetch all feeder points from the database
+    const feederPointsRef = collection(db, "feederPoints");
+    const querySnapshot = await getDocs(feederPointsRef);
 
-    console.log('✅ Added GPS coordinates to Ramganj feeder point');
+    if (querySnapshot.empty) {
+      console.log('⚠️ No feeder points found in the database');
+      return;
+    }
 
-    // Add GPS coordinates to "K1 test" feeder point
-    const k1testId = "lanGGn7HxuSgAvUswa5X";
-    await updateDoc(doc(db, "feederPoints", k1testId), {
-      gpsCoordinates: {
-        latitude: 24.5800,  // Another location
-        longitude: 73.7050,
-        accuracy: 10
-      },
-      updatedAt: new Date()
-    });
+    console.log(`📍 Found ${querySnapshot.size} feeder points in the database`);
 
-    console.log('✅ Added GPS coordinates to K1 test feeder point');
+    // Base coordinates for Udaipur area
+    const baseLatitude = 24.5854;
+    const baseLongitude = 73.7125;
 
+    // Array to store coordinate assignments
+    const coordinateAssignments = [];
+    let index = 0;
+
+    // Process each feeder point
+    for (const docSnapshot of querySnapshot.docs) {
+      const feederPointData = docSnapshot.data();
+      const feederPointId = docSnapshot.id;
+
+      // Generate slightly different coordinates for each feeder point
+      // This spreads them around Udaipur area with realistic distances
+      const latOffset = (Math.random() - 0.5) * 0.02; // ~1km variation
+      const lngOffset = (Math.random() - 0.5) * 0.02; // ~1km variation
+
+      const coordinates = {
+        latitude: baseLatitude + latOffset,
+        longitude: baseLongitude + lngOffset,
+        accuracy: Math.floor(Math.random() * 15) + 5 // 5-20 meters accuracy
+      };
+
+      // Update the feeder point with GPS coordinates
+      await updateDoc(doc(db, "feederPoints", feederPointId), {
+        gpsCoordinates: coordinates,
+        updatedAt: new Date()
+      });
+
+      coordinateAssignments.push({
+        id: feederPointId,
+        name: feederPointData.feederPointName || 'Unnamed',
+        area: feederPointData.areaName || 'Unknown Area',
+        coordinates: coordinates
+      });
+
+      console.log(`✅ Added GPS coordinates to "${feederPointData.feederPointName || 'Unnamed'}" (${feederPointId})`);
+      index++;
+    }
+
+    // Display summary
     console.log('\n📍 GPS Coordinates Summary:');
-    console.log('  • Hms solaris: 24.5854, 73.7125');
-    console.log('  • Ramganj: 24.5900, 73.7200');
-    console.log('  • K1 test: 24.5800, 73.7050');
+    coordinateAssignments.forEach((assignment, idx) => {
+      console.log(`  ${idx + 1}. ${assignment.name} (${assignment.area})`);
+      console.log(`     📍 ${assignment.coordinates.latitude.toFixed(6)}, ${assignment.coordinates.longitude.toFixed(6)}`);
+      console.log(`     🎯 Accuracy: ${assignment.coordinates.accuracy}m`);
+      console.log(`     🆔 ID: ${assignment.id}`);
+      console.log('');
+    });
 
     console.log('\n🎯 Testing Instructions:');
     console.log('  1. Use a GPS spoofing app to set your location near these coordinates');
     console.log('  2. Test the proximity checking (100m threshold)');
     console.log('  3. Try starting a trip when within/outside the range');
+    console.log('  4. All coordinates are in the Udaipur area for realistic testing');
 
-    console.log('\n✅ GPS coordinates added successfully!');
-    
+    console.log(`\n✅ GPS coordinates added successfully to ${coordinateAssignments.length} feeder points!`);
+
   } catch (error) {
     console.error('❌ Error adding GPS coordinates:', error);
+    if (error.message.includes('Firebase configuration')) {
+      console.error('💡 Make sure your .env file contains all required Firebase configuration variables');
+    }
   }
 }
 
