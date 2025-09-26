@@ -90,10 +90,22 @@ const UserManagement = ({ navigation }: any) => {
     const fetchData = async () => {
         setLoading(true);
         try {
-            await Promise.all([
-                fetchUsers(),
-                fetchApprovalRequests()
-            ]);
+            const usersList = await fetchUsers();
+            const requestsList = await fetchApprovalRequests();
+
+            const stats = {
+                totalUsers: usersList.length,
+                activeUsers: usersList.filter(u => u.isActive).length,
+                drivers: usersList.filter(u => u.role === 'driver').length,
+                contractors: usersList.filter(u => u.role === 'transport_contractor').length,
+                swachhHR: usersList.filter(u => u.role === 'swachh_hr').length,
+                admins: usersList.filter(u => u.role === 'admin').length,
+                pendingApprovals: requestsList.length
+            };
+
+            setUsers(usersList);
+            setApprovalRequests(requestsList);
+            setUserStats(stats);
         } catch (error) {
             console.error('Error fetching data:', error);
             Alert.alert('Error', 'Failed to fetch data');
@@ -102,44 +114,29 @@ const UserManagement = ({ navigation }: any) => {
         }
     };
 
-    const fetchUsers = async () => {
+    const fetchUsers = async (): Promise<User[]> => {
         try {
             const usersQuery = query(
                 collection(FIRESTORE_DB, 'users'),
                 orderBy('createdAt', 'desc')
             );
             const usersSnapshot = await getDocs(usersQuery);
-            const usersList = usersSnapshot.docs.map(doc => ({
+            return usersSnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             })) as User[];
-
-            setUsers(usersList);
-
-            // Calculate stats
-            const stats = {
-                totalUsers: usersList.length,
-                activeUsers: usersList.filter(u => u.isActive).length,
-                drivers: usersList.filter(u => u.role === 'driver').length,
-                contractors: usersList.filter(u => u.role === 'transport_contractor').length,
-                swachhHR: usersList.filter(u => u.role === 'swachh_hr').length,
-                admins: usersList.filter(u => u.role === 'admin').length,
-                pendingApprovals: 0 // Will be updated when fetching approval requests
-            };
-
-            setUserStats(prev => ({ ...prev, ...stats }));
         } catch (error) {
             console.error('Error fetching users:', error);
+            return [];
         }
     };
 
-    const fetchApprovalRequests = async () => {
+    const fetchApprovalRequests = async (): Promise<ApprovalRequest[]> => {
         try {
-            const requestsList = await ApprovalService.getAdminApprovalRequests();
-            setApprovalRequests(requestsList);
-            setUserStats(prev => ({ ...prev, pendingApprovals: requestsList.length }));
+            return await ApprovalService.getAdminApprovalRequests();
         } catch (error) {
             console.error('Error fetching approval requests:', error);
+            return [];
         }
     };
 
@@ -869,8 +866,9 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
     },
     statCard: {
-        width: '48%',
-        marginBottom: 16,
+        flex: 1,
+        minWidth: '45%',
+        margin: 6,
         borderRadius: 12,
         elevation: 4,
         shadowColor: '#000',
@@ -879,7 +877,7 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
     },
     statGradient: {
-        padding: 20,
+        padding: 15,
         borderRadius: 12,
         alignItems: 'center',
     },
