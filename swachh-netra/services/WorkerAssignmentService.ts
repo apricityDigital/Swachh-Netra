@@ -348,6 +348,75 @@ export class WorkerAssignmentService {
     }
   }
 
+  // Update assignments for a single worker
+  static async updateWorkerAssignments(
+    workerId: string,
+    newFeederPointIds: string[],
+    assignedBy: string
+  ): Promise<void> {
+    try {
+      console.log("🔄 [WorkerAssignmentService] Updating worker assignments:", {
+        workerId,
+        newFeederPointIds,
+      });
+
+      const batch = writeBatch(FIRESTORE_DB);
+      const workerRef = doc(FIRESTORE_DB, "workers", workerId);
+      const workerDoc = await getDoc(workerRef);
+
+      if (!workerDoc.exists()) {
+        throw new Error("Worker not found");
+      }
+
+      const workerData = workerDoc.data() as Worker;
+      const currentFeederPointIds = workerData.assignedFeederPointIds || [];
+
+      const feederPointsToAdd = newFeederPointIds.filter(
+        (id) => !currentFeederPointIds.includes(id)
+      );
+      const feederPointsToRemove = currentFeederPointIds.filter(
+        (id) => !newFeederPointIds.includes(id)
+      );
+
+      // Remove assignments
+      for (const feederPointId of feederPointsToRemove) {
+        const feederPointRef = doc(FIRESTORE_DB, "feederPoints", feederPointId);
+        const feederPointDoc = await getDoc(feederPointRef);
+        if (feederPointDoc.exists()) {
+          const feederPointData = feederPointDoc.data();
+          const updatedWorkers = (feederPointData.assignedWorkerIds || []).filter(
+            (id: string) => id !== workerId
+          );
+          batch.update(feederPointRef, { assignedWorkerIds: updatedWorkers });
+        }
+      }
+
+      // Add assignments
+      for (const feederPointId of feederPointsToAdd) {
+        const feederPointRef = doc(FIRESTORE_DB, "feederPoints", feederPointId);
+        const feederPointDoc = await getDoc(feederPointRef);
+        if (feederPointDoc.exists()) {
+          const feederPointData = feederPointDoc.data();
+          const updatedWorkers = [...(feederPointData.assignedWorkerIds || []), workerId];
+          batch.update(feederPointRef, { assignedWorkerIds: updatedWorkers });
+        }
+      }
+
+      // Update worker's assignments
+      batch.update(workerRef, { assignedFeederPointIds: newFeederPointIds });
+
+      await batch.commit();
+      console.log("✅ [WorkerAssignmentService] Worker assignments updated successfully");
+    } catch (error) {
+      console.error("❌ [WorkerAssignmentService] Error updating worker assignments:", error);
+      throw new Error(
+        `Failed to update worker assignments: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    }
+  }
+
   // Get assignments for a feeder point
   static async getFeederPointAssignments(feederPointId: string): Promise<WorkerAssignment[]> {
     try {
