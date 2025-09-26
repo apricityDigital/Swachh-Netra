@@ -31,6 +31,11 @@ const WorkerAssignment = ({ navigation }: any) => {
   const [assignModalVisible, setAssignModalVisible] = useState(false)
   const [viewMode, setViewMode] = useState<'feederPoints' | 'workers'>('feederPoints')
 
+  // Edit states
+  const [editModalVisible, setEditModalVisible] = useState(false)
+  const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null)
+  const [selectedFeederPointsForWorker, setSelectedFeederPointsForWorker] = useState<string[]>([])
+
   useEffect(() => {
     fetchData()
   }, [])
@@ -145,6 +150,50 @@ const WorkerAssignment = ({ navigation }: any) => {
     } catch (error) {
       console.error("❌ [WorkerAssignment] Error saving assignment:", error)
       Alert.alert("Error", "Failed to save assignments. Please try again.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEditWorkerAssignments = (worker: Worker) => {
+    setSelectedWorker(worker)
+    setSelectedFeederPointsForWorker(worker.assignedFeederPointIds || [])
+    setEditModalVisible(true)
+  }
+
+  const handleFeederPointToggleForWorker = (feederPointId: string) => {
+    setSelectedFeederPointsForWorker(prev =>
+      prev.includes(feederPointId)
+        ? prev.filter(id => id !== feederPointId)
+        : [...prev, feederPointId]
+    )
+  }
+
+  const handleUpdateWorkerAssignments = async () => {
+    if (!selectedWorker || !userData?.uid) return
+
+    try {
+      setLoading(true)
+      await WorkerAssignmentService.updateWorkerAssignments(
+        selectedWorker.id,
+        selectedFeederPointsForWorker,
+        userData.uid
+      )
+
+      Alert.alert("Success", "Worker assignments updated successfully", [
+        {
+          text: "OK",
+          onPress: () => {
+            setEditModalVisible(false)
+            setSelectedWorker(null)
+            setSelectedFeederPointsForWorker([])
+            fetchData()
+          }
+        }
+      ])
+    } catch (error) {
+      console.error("❌ [WorkerAssignment] Error updating worker assignments:", error)
+      Alert.alert("Error", "Failed to update assignments. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -274,26 +323,22 @@ const WorkerAssignment = ({ navigation }: any) => {
             </View>
 
             {assignedFeederPoints.length > 0 ? (
-              <View style={styles.workerFeederPointsList}>
-                {assignedFeederPoints.slice(0, 3).map((fp) => (
-                  <View key={fp.id} style={styles.feederPointItem}>
-                    <View style={styles.feederPointIcon}>
-                      <MaterialIcons name="place" size={14} color="#059669" />
+              <View style={{ maxHeight: 150 }}>
+                <FlatList
+                  data={assignedFeederPoints}
+                  renderItem={({ item: fp }) => (
+                    <View key={fp.id} style={styles.feederPointItem}>
+                      <View style={styles.feederPointIcon}>
+                        <MaterialIcons name="place" size={14} color="#059669" />
+                      </View>
+                      <View style={styles.feederPointDetails}>
+                        <Text style={styles.feederPointName}>{fp.feederPointName}</Text>
+                        <Text style={styles.feederPointArea}>{fp.areaName}</Text>
+                      </View>
                     </View>
-                    <View style={styles.feederPointDetails}>
-                      <Text style={styles.feederPointName}>{fp.feederPointName}</Text>
-                      <Text style={styles.feederPointArea}>{fp.areaName}</Text>
-                    </View>
-                  </View>
-                ))}
-                {assignedFeederPoints.length > 3 && (
-                  <View style={styles.moreFeederPoints}>
-                    <MaterialIcons name="more-horiz" size={16} color="#6b7280" />
-                    <Text style={styles.moreFeederPointsText}>
-                      +{assignedFeederPoints.length - 3} more locations
-                    </Text>
-                  </View>
-                )}
+                  )}
+                  keyExtractor={(fp) => fp.id}
+                />
               </View>
             ) : (
               <View style={styles.noAssignmentContainer}>
@@ -305,24 +350,14 @@ const WorkerAssignment = ({ navigation }: any) => {
           </View>
 
           <View style={styles.workerCardActions}>
-            <View style={styles.workerStatsRow}>
-              <View style={styles.workerStat}>
-                <Text style={styles.workerStatNumber}>{assignedFeederPoints.length}</Text>
-                <Text style={styles.workerStatLabel}>Locations</Text>
-              </View>
-              <View style={styles.workerStat}>
-                <Text style={styles.workerStatNumber}>
-                  {item.isActive ? "✓" : "✗"}
-                </Text>
-                <Text style={styles.workerStatLabel}>Status</Text>
-              </View>
-              <View style={styles.workerStat}>
-                <Text style={styles.workerStatNumber}>
-                  {new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                </Text>
-                <Text style={styles.workerStatLabel}>Joined</Text>
-              </View>
-            </View>
+            <Button
+              mode="contained"
+              onPress={() => handleEditWorkerAssignments(item)}
+              style={styles.assignButton}
+              icon="edit"
+            >
+              Edit Assignments
+            </Button>
           </View>
         </View>
       </Card>
@@ -552,6 +587,73 @@ const WorkerAssignment = ({ navigation }: any) => {
                   loading={loading}
                 >
                   Save Assignment
+                </Button>
+              </View>
+            </View>
+          </ScrollView>
+        </Modal>
+      </Portal>
+
+      {/* Edit Worker Assignments Modal */}
+      <Portal>
+        <Modal
+          visible={editModalVisible}
+          onDismiss={() => setEditModalVisible(false)}
+          contentContainerStyle={styles.modalContainer}
+        >
+          <ScrollView style={styles.modalScrollView}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <MaterialIcons name="edit-location" size={24} color="#2563eb" />
+                <Text style={styles.modalTitle}>Edit Assignments</Text>
+              </View>
+
+              {selectedWorker && (
+                <View style={styles.feederPointSummary}>
+                  <Text style={styles.feederPointSummaryName}>{selectedWorker.fullName}</Text>
+                  <Text style={styles.feederPointSummaryArea}>{selectedWorker.email}</Text>
+                </View>
+              )}
+
+              {/* Feeder Points Selection */}
+              <View style={styles.selectionSection}>
+                <Text style={styles.selectionTitle}>Select Feeder Points ({selectedFeederPointsForWorker.length} selected)</Text>
+
+                {feederPoints.map((fp) => (
+                  <TouchableOpacity
+                    key={fp.id}
+                    style={[
+                      styles.selectionItem,
+                      selectedFeederPointsForWorker.includes(fp.id) && styles.selectedItem,
+                    ]}
+                    onPress={() => handleFeederPointToggleForWorker(fp.id)}
+                  >
+                    <View style={styles.workerInfo}>
+                      <Text style={styles.workerName}>{fp.feederPointName}</Text>
+                      <Text style={styles.workerEmail}>{fp.areaName}</Text>
+                    </View>
+                    {selectedFeederPointsForWorker.includes(fp.id) && (
+                      <MaterialIcons name="check-circle" size={24} color="#059669" />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.modalActions}>
+                <Button
+                  mode="outlined"
+                  onPress={() => setEditModalVisible(false)}
+                  style={styles.modalButton}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleUpdateWorkerAssignments}
+                  style={styles.modalButton}
+                  loading={loading}
+                >
+                  Save Changes
                 </Button>
               </View>
             </View>
