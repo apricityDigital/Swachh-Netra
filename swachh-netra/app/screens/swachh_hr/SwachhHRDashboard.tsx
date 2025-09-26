@@ -14,23 +14,28 @@ import {
 import { Card, Text } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
 import { WorkerService } from "../../../services/WorkerService"
-import FirebaseService from "../../../services/FirebaseService"
+import { WorkerAssignmentService } from "../../../services/WorkerAssignmentService"
+import { WorkerAttendanceService } from "../../../services/WorkerAttendanceService"
 import { useQuickLogout } from "../../hooks/useLogout"
+import { useAuth } from "../../../contexts/AuthContext"
 
 const { width } = Dimensions.get("window")
 
 const SwachhHRDashboard = ({ navigation }: any) => {
   const { quickLogout, AlertComponent } = useQuickLogout(navigation)
+  const { userData } = useAuth()
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [hrStats, setHrStats] = useState({
-    totalWorkers: 45,
-    activeWorkers: 38,
-    todayAttendance: 85,
-    wasteCollected: 2.4,
-    unassignedWorkers: 3,
-    pendingRequests: 2,
-    activeFeederPoints: 15,
+    totalWorkers: 0,
+    activeWorkers: 0,
+    todayAttendance: 0,
+    wasteCollected: 0,
+    unassignedWorkers: 0,
+    pendingRequests: 0,
+    activeFeederPoints: 0,
+    assignedWorkers: 0,
+    totalAssignments: 0,
   })
   const [userName, setUserName] = useState("HR Manager")
 
@@ -84,33 +89,51 @@ const SwachhHRDashboard = ({ navigation }: any) => {
   const fetchDashboardData = async () => {
     setLoading(true)
     try {
-      const user = process.env.FIREBASE_AUTH.currentUser
-      if (user) {
-        // Fetch real user data
-        const userData = await FirebaseService.getUserData(user.uid)
-        if (userData) {
-          setUserName(userData.fullName || "HR Manager")
-        }
-
-        // Fetch real worker data (only active workers)
-        const allWorkers = await WorkerService.getAllWorkers(false) // false = only active workers
-        const activeWorkers = allWorkers // all fetched workers are already active
-
-        // Fetch pending approval requests
-        const pendingRequests = await WorkerService.getPendingWorkerApprovalRequests()
-
-        setHrStats({
-          totalWorkers: allWorkers.length,
-          activeWorkers: activeWorkers.length,
-          todayAttendance: allWorkers.length > 0 ? Math.round((activeWorkers.length / allWorkers.length) * 100) : 0,
-          wasteCollected: 2.4, // This would come from actual waste collection data
-          unassignedWorkers: 0, // Since we only fetch active workers, unassigned would be calculated differently
-          pendingRequests: pendingRequests.length,
-          activeFeederPoints: 15, // This would come from feeder point data
-        })
+      // Set user name from auth context
+      if (userData) {
+        setUserName(userData.fullName || userData.email || "HR Manager")
       }
+
+      // Fetch all data in parallel for better performance
+      const [
+        allWorkers,
+        feederPoints,
+        pendingRequests,
+        todayAttendanceStats
+      ] = await Promise.all([
+        WorkerAssignmentService.getAllWorkers(),
+        WorkerAssignmentService.getAllFeederPoints(),
+        WorkerService.getPendingWorkerApprovalRequests(),
+        getTodayAttendanceStats()
+      ])
+
+      // Calculate assignment statistics
+      const assignedWorkers = allWorkers.filter(worker =>
+        worker.assignedFeederPointIds && worker.assignedFeederPointIds.length > 0
+      ).length
+
+      const unassignedWorkers = allWorkers.length - assignedWorkers
+
+      const activeFeederPoints = feederPoints.filter(fp => fp.isActive).length
+
+      const totalAssignments = feederPoints.reduce((total, fp) =>
+        total + (fp.assignedWorkerIds?.length || 0), 0
+      )
+
+      setHrStats({
+        totalWorkers: allWorkers.length,
+        activeWorkers: allWorkers.filter(w => w.isActive).length,
+        todayAttendance: todayAttendanceStats.attendanceRate,
+        wasteCollected: 2.4, // This would come from actual waste collection data
+        unassignedWorkers,
+        pendingRequests: pendingRequests.length,
+        activeFeederPoints,
+        assignedWorkers,
+        totalAssignments,
+      })
+
     } catch (error) {
-      console.log("Error fetching dashboard data:", error)
+      console.error("Error fetching dashboard data:", error)
       // Fallback to default values on error
       setHrStats({
         totalWorkers: 0,
@@ -120,9 +143,36 @@ const SwachhHRDashboard = ({ navigation }: any) => {
         unassignedWorkers: 0,
         pendingRequests: 0,
         activeFeederPoints: 0,
+        assignedWorkers: 0,
+        totalAssignments: 0,
       })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const getTodayAttendanceStats = async () => {
+    try {
+      const today = new Date()
+      const startOfDay = new Date(today)
+      startOfDay.setHours(0, 0, 0, 0)
+      const endOfDay = new Date(today)
+      endOfDay.setHours(23, 59, 59, 999)
+
+      const attendanceRecords = await WorkerAttendanceService.getAttendanceForHRAndAdmin(
+        'swachh_hr',
+        startOfDay,
+        endOfDay
+      )
+
+      const presentCount = attendanceRecords.filter(r => r.status === 'present').length
+      const totalRecords = attendanceRecords.length
+      const attendanceRate = totalRecords > 0 ? Math.round((presentCount / totalRecords) * 100) : 0
+
+      return { attendanceRate, presentCount, totalRecords }
+    } catch (error) {
+      console.error("Error fetching attendance stats:", error)
+      return { attendanceRate: 0, presentCount: 0, totalRecords: 0 }
     }
   }
 
@@ -243,6 +293,30 @@ const SwachhHRDashboard = ({ navigation }: any) => {
                 </View>
               </View>
             </Card>
+
+            <Card style={styles.statCard}>
+              <View style={styles.statContent}>
+                <View style={[styles.statIcon, { backgroundColor: '#f0f9ff' }]}>
+                  <MaterialIcons name="assignment" size={24} color="#0ea5e9" />
+                </View>
+                <View style={styles.statInfo}>
+                  <Text style={styles.statNumber}>{hrStats.assignedWorkers}</Text>
+                  <Text style={styles.statLabel}>Assigned</Text>
+                </View>
+              </View>
+            </Card>
+
+            <Card style={styles.statCard}>
+              <View style={styles.statContent}>
+                <View style={[styles.statIcon, { backgroundColor: '#fefce8' }]}>
+                  <MaterialIcons name="location-on" size={24} color="#eab308" />
+                </View>
+                <View style={styles.statInfo}>
+                  <Text style={styles.statNumber}>{hrStats.activeFeederPoints}</Text>
+                  <Text style={styles.statLabel}>Active Points</Text>
+                </View>
+              </View>
+            </Card>
           </View>
         </View>
 
@@ -301,6 +375,16 @@ const SwachhHRDashboard = ({ navigation }: any) => {
                       <Text style={styles.summaryText}>Active Feeder Points</Text>
                     </View>
                     <Text style={styles.summaryValue}>{hrStats.activeFeederPoints}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.summaryItem}>
+                  <View style={styles.summaryRow}>
+                    <View style={styles.summaryLabel}>
+                      <MaterialIcons name="assignment" size={16} color="#0ea5e9" />
+                      <Text style={styles.summaryText}>Total Assignments</Text>
+                    </View>
+                    <Text style={styles.summaryValue}>{hrStats.totalAssignments}</Text>
                   </View>
                 </View>
 

@@ -115,10 +115,10 @@ export class WorkerAssignmentService {
   static async getAllFeederPoints(): Promise<FeederPoint[]> {
     try {
       console.log("🔄 [WorkerAssignmentService] Fetching all feeder points...")
-      
+
       const feederPointsSnapshot = await getDocs(collection(FIRESTORE_DB, "feederPoints"))
       const feederPoints: FeederPoint[] = []
-      
+
       feederPointsSnapshot.forEach((doc) => {
         try {
           const data = doc.data()
@@ -137,7 +137,7 @@ export class WorkerAssignmentService {
           // Continue processing other documents
         }
       })
-      
+
       console.log(`✅ [WorkerAssignmentService] Found ${feederPoints.length} feeder points`)
       return feederPoints
     } catch (error) {
@@ -213,7 +213,7 @@ export class WorkerAssignmentService {
           createdAt: new Date(),
           updatedAt: new Date()
         }
-        
+
         batch.set(assignmentRef, {
           ...assignment,
           assignedAt: serverTimestamp(),
@@ -271,7 +271,7 @@ export class WorkerAssignmentService {
         where("feederPointId", "==", feederPointId),
         where("status", "==", "active")
       )
-      
+
       const assignmentsSnapshot = await getDocs(assignmentsQuery)
       assignmentsSnapshot.forEach((doc) => {
         batch.update(doc.ref, {
@@ -312,7 +312,7 @@ export class WorkerAssignmentService {
         const feederPointData = feederPointDoc.data()
         const currentWorkers = feederPointData.assignedWorkerIds || []
         const updatedWorkers = currentWorkers.filter((id: string) => id !== workerId)
-        
+
         batch.update(doc(FIRESTORE_DB, "feederPoints", feederPointId), {
           assignedWorkerIds: updatedWorkers,
           updatedAt: serverTimestamp()
@@ -324,7 +324,27 @@ export class WorkerAssignmentService {
 
     } catch (error) {
       console.error("❌ [WorkerAssignmentService] Error removing worker:", error)
-      throw new Error("Failed to remove worker assignment")
+      console.error("❌ [WorkerAssignmentService] Error details:", {
+        workerId,
+        feederPointId,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      })
+
+      // Provide more specific error messages
+      if (error instanceof Error) {
+        if (error.message.includes('permission')) {
+          throw new Error("Permission denied: Unable to remove worker assignment")
+        } else if (error.message.includes('not-found')) {
+          throw new Error("Worker or feeder point not found")
+        } else if (error.message.includes('network')) {
+          throw new Error("Network error: Please check your connection and try again")
+        } else {
+          throw new Error(`Failed to remove worker assignment: ${error.message}`)
+        }
+      } else {
+        throw new Error("Failed to remove worker assignment: Unknown error occurred")
+      }
     }
   }
 
@@ -336,10 +356,10 @@ export class WorkerAssignmentService {
         where("feederPointId", "==", feederPointId),
         where("status", "==", "active")
       )
-      
+
       const assignmentsSnapshot = await getDocs(assignmentsQuery)
       const assignments: WorkerAssignment[] = []
-      
+
       assignmentsSnapshot.forEach((doc) => {
         try {
           const data = doc.data()

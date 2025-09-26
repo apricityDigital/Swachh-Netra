@@ -19,12 +19,12 @@ const WorkerAssignment = ({ navigation }: any) => {
   const { userData } = useAuth()
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  
+
   // Data states
   const [workers, setWorkers] = useState<Worker[]>([])
   const [feederPoints, setFeederPoints] = useState<FeederPoint[]>([])
   const [searchQuery, setSearchQuery] = useState("")
-  
+
   // Assignment states
   const [selectedFeederPoint, setSelectedFeederPoint] = useState<FeederPoint | null>(null)
   const [selectedWorkers, setSelectedWorkers] = useState<string[]>([])
@@ -166,7 +166,7 @@ const WorkerAssignment = ({ navigation }: any) => {
 
   const renderFeederPointCard = ({ item }: { item: FeederPoint }) => {
     const assignedWorkers = workers.filter(w => item.assignedWorkerIds?.includes(w.id))
-    
+
     return (
       <Card style={styles.card}>
         <View style={styles.cardContent}>
@@ -232,55 +232,97 @@ const WorkerAssignment = ({ navigation }: any) => {
 
   const renderWorkerCard = ({ item }: { item: Worker }) => {
     const assignedFeederPoints = feederPoints.filter(fp => item.assignedFeederPointIds?.includes(fp.id))
-    
+
     return (
-      <Card style={styles.card}>
-        <View style={styles.cardContent}>
-          <View style={styles.cardHeader}>
-            <View style={styles.cardInfo}>
-              <Text style={styles.cardTitle}>{item.fullName}</Text>
-              <Text style={styles.cardSubtitle}>{item.email}</Text>
+      <Card style={styles.workerCard}>
+        <View style={styles.workerCardContent}>
+          <View style={styles.workerCardHeader}>
+            <View style={styles.workerAvatarContainer}>
+              <View style={styles.workerAvatar}>
+                <MaterialIcons name="person" size={24} color="#3b82f6" />
+              </View>
+            </View>
+            <View style={styles.workerCardInfo}>
+              <Text style={styles.workerCardTitle}>{item.fullName}</Text>
+              <Text style={styles.workerCardSubtitle}>{item.email}</Text>
               {item.phoneNumber && (
-                <Text style={styles.cardDetails}>{item.phoneNumber}</Text>
+                <Text style={styles.workerCardDetails}>📞 {item.phoneNumber}</Text>
               )}
             </View>
-            <Chip
-              style={[
-                styles.statusChip,
-                { backgroundColor: item.isActive ? "#f0fdf4" : "#fef2f2" }
-              ]}
-              textStyle={[
-                styles.statusText,
-                { color: item.isActive ? "#059669" : "#dc2626" }
-              ]}
-            >
-              {item.isActive ? "Active" : "Inactive"}
-            </Chip>
+            <View style={styles.workerStatusContainer}>
+              <Chip
+                style={[
+                  styles.workerStatusChip,
+                  { backgroundColor: item.isActive ? "#f0fdf4" : "#fef2f2" }
+                ]}
+                textStyle={[
+                  styles.workerStatusText,
+                  { color: item.isActive ? "#059669" : "#dc2626" }
+                ]}
+              >
+                {item.isActive ? "Active" : "Inactive"}
+              </Chip>
+            </View>
           </View>
 
-          <View style={styles.assignmentInfo}>
-            <View style={styles.assignmentRow}>
-              <MaterialIcons name="location-on" size={16} color="#6b7280" />
-              <Text style={styles.assignmentText}>
-                Feeder Points: {assignedFeederPoints.length}
+          <View style={styles.workerAssignmentInfo}>
+            <View style={styles.workerAssignmentHeader}>
+              <MaterialIcons name="location-on" size={18} color="#3b82f6" />
+              <Text style={styles.workerAssignmentTitle}>
+                Assigned Locations ({assignedFeederPoints.length})
               </Text>
             </View>
+
             {assignedFeederPoints.length > 0 ? (
-              <View style={styles.workersList}>
-                {assignedFeederPoints.slice(0, 2).map((fp) => (
-                  <Chip key={fp.id} style={styles.workerChip} textStyle={styles.workerChipText}>
-                    {fp.feederPointName || "Unknown Point"}
-                  </Chip>
+              <View style={styles.workerFeederPointsList}>
+                {assignedFeederPoints.slice(0, 3).map((fp) => (
+                  <View key={fp.id} style={styles.feederPointItem}>
+                    <View style={styles.feederPointIcon}>
+                      <MaterialIcons name="place" size={14} color="#059669" />
+                    </View>
+                    <View style={styles.feederPointDetails}>
+                      <Text style={styles.feederPointName}>{fp.feederPointName}</Text>
+                      <Text style={styles.feederPointArea}>{fp.areaName}</Text>
+                    </View>
+                  </View>
                 ))}
-                {assignedFeederPoints.length > 2 && (
-                  <Chip style={styles.moreChip} textStyle={styles.moreChipText}>
-                    +{assignedFeederPoints.length - 2} more
-                  </Chip>
+                {assignedFeederPoints.length > 3 && (
+                  <View style={styles.moreFeederPoints}>
+                    <MaterialIcons name="more-horiz" size={16} color="#6b7280" />
+                    <Text style={styles.moreFeederPointsText}>
+                      +{assignedFeederPoints.length - 3} more locations
+                    </Text>
+                  </View>
                 )}
               </View>
             ) : (
-              <Text style={styles.noAssignmentText}>No feeder points assigned</Text>
+              <View style={styles.noAssignmentContainer}>
+                <MaterialIcons name="location-off" size={20} color="#9ca3af" />
+                <Text style={styles.noAssignmentText}>No locations assigned</Text>
+                <Text style={styles.noAssignmentSubtext}>Worker is available for assignment</Text>
+              </View>
             )}
+          </View>
+
+          <View style={styles.workerCardActions}>
+            <View style={styles.workerStatsRow}>
+              <View style={styles.workerStat}>
+                <Text style={styles.workerStatNumber}>{assignedFeederPoints.length}</Text>
+                <Text style={styles.workerStatLabel}>Locations</Text>
+              </View>
+              <View style={styles.workerStat}>
+                <Text style={styles.workerStatNumber}>
+                  {item.isActive ? "✓" : "✗"}
+                </Text>
+                <Text style={styles.workerStatLabel}>Status</Text>
+              </View>
+              <View style={styles.workerStat}>
+                <Text style={styles.workerStatNumber}>
+                  {new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                </Text>
+                <Text style={styles.workerStatLabel}>Joined</Text>
+              </View>
+            </View>
           </View>
         </View>
       </Card>
@@ -299,7 +341,7 @@ const WorkerAssignment = ({ navigation }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -378,7 +420,7 @@ const WorkerAssignment = ({ navigation }: any) => {
           <Text style={styles.sectionTitle}>
             {viewMode === 'feederPoints' ? 'Feeder Points' : 'Workers'}
           </Text>
-          
+
           {viewMode === 'feederPoints' ? (
             filteredFeederPoints.length === 0 ? (
               <View style={styles.emptyState}>
@@ -849,6 +891,176 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
+  },
+  // Enhanced Worker Card Styles
+  workerCard: {
+    backgroundColor: "#ffffff",
+    marginBottom: 16,
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#f1f5f9",
+  },
+  workerCardContent: {
+    padding: 20,
+  },
+  workerCardHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 16,
+  },
+  workerAvatarContainer: {
+    marginRight: 16,
+  },
+  workerAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#eff6ff",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#dbeafe",
+  },
+  workerCardInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  workerCardTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1f2937",
+    marginBottom: 4,
+  },
+  workerCardSubtitle: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginBottom: 4,
+  },
+  workerCardDetails: {
+    fontSize: 13,
+    color: "#9ca3af",
+    fontWeight: "500",
+  },
+  workerStatusContainer: {
+    alignItems: "flex-end",
+  },
+  workerStatusChip: {
+    height: 32,
+    borderRadius: 16,
+  },
+  workerStatusText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  workerAssignmentInfo: {
+    marginBottom: 16,
+  },
+  workerAssignmentHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  workerAssignmentTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#374151",
+    marginLeft: 8,
+  },
+  workerFeederPointsList: {
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+    padding: 12,
+  },
+  feederPointItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  feederPointIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#f0fdf4",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  feederPointDetails: {
+    flex: 1,
+  },
+  feederPointName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1f2937",
+    marginBottom: 2,
+  },
+  feederPointArea: {
+    fontSize: 12,
+    color: "#6b7280",
+  },
+  moreFeederPoints: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    marginTop: 4,
+  },
+  moreFeederPointsText: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginLeft: 4,
+    fontStyle: "italic",
+  },
+  noAssignmentContainer: {
+    alignItems: "center",
+    paddingVertical: 20,
+    backgroundColor: "#f9fafb",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderStyle: "dashed",
+  },
+  noAssignmentText: {
+    fontSize: 14,
+    color: "#6b7280",
+    fontWeight: "500",
+    marginTop: 8,
+  },
+  noAssignmentSubtext: {
+    fontSize: 12,
+    color: "#9ca3af",
+    marginTop: 4,
+  },
+  workerCardActions: {
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9",
+    paddingTop: 16,
+  },
+  workerStatsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+  },
+  workerStat: {
+    alignItems: "center",
+    flex: 1,
+  },
+  workerStatNumber: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1f2937",
+    marginBottom: 4,
+  },
+  workerStatLabel: {
+    fontSize: 12,
+    color: "#6b7280",
+    fontWeight: "500",
   },
 })
 

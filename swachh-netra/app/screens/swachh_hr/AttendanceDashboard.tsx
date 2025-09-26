@@ -15,10 +15,14 @@ import { Card, Text, Button, Chip, Searchbar, DataTable } from "react-native-pap
 import { MaterialIcons } from "@expo/vector-icons"
 import {
   collection,
+  doc,
   query,
   where,
   orderBy,
   getDocs,
+  updateDoc,
+  writeBatch,
+  serverTimestamp,
   Timestamp
 } from 'firebase/firestore'
 import { FIRESTORE_DB } from "../../../FirebaseConfig"
@@ -130,13 +134,35 @@ const AttendanceDashboard = ({ navigation }: any) => {
           queryEndDate.setHours(23, 59, 59, 999)
       }
 
-      // Use the enhanced service method for HR access
-      const records = await WorkerAttendanceService.getAttendanceForHRAndAdmin(
-        userData?.role || 'swachh_hr',
-        queryStartDate,
-        queryEndDate,
-        employeeFilter || undefined
+      // Use direct Firestore query like admin dashboard for better reliability
+      const attendanceQuery = query(
+        collection(FIRESTORE_DB, "workerAttendance"),
+        where("timestamp", ">=", Timestamp.fromDate(queryStartDate)),
+        where("timestamp", "<=", Timestamp.fromDate(queryEndDate)),
+        orderBy("timestamp", "desc")
       )
+
+      const attendanceSnapshot = await getDocs(attendanceQuery)
+      const records: AttendanceRecord[] = []
+
+      attendanceSnapshot.forEach((doc) => {
+        const data = doc.data()
+        records.push({
+          id: doc.id,
+          workerId: data.workerId || "",
+          workerName: data.workerName || "Unknown Worker",
+          feederPointId: data.feederPointId || "",
+          feederPointName: data.feederPointName || "Unknown Point",
+          driverId: data.driverId || "",
+          driverName: data.driverName || "Unknown Driver",
+          tripId: data.tripId || "",
+          status: data.status || "absent",
+          timestamp: data.timestamp?.toDate() || new Date(),
+          location: data.location || { latitude: 0, longitude: 0 },
+          photoUri: data.photoUri,
+          notes: data.notes
+        })
+      })
 
       setAttendanceRecords(records)
 
@@ -159,6 +185,7 @@ const AttendanceDashboard = ({ navigation }: any) => {
       Alert.alert("Error", "Failed to fetch attendance data. Please try again.")
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
@@ -235,11 +262,17 @@ const AttendanceDashboard = ({ navigation }: any) => {
 
   const handleUpdateRecord = async (updatedRecord: AttendanceRecord) => {
     try {
-      // Update the record in the database
-      await WorkerAttendanceService.updateAttendanceRecord(updatedRecord.id, {
+      if (!updatedRecord.id) {
+        throw new Error("Record ID is required for update")
+      }
+
+      // Update the record in the database using direct Firestore update
+      const recordRef = doc(FIRESTORE_DB, "workerAttendance", updatedRecord.id)
+      await updateDoc(recordRef, {
         status: updatedRecord.status,
-        notes: updatedRecord.notes,
-        timestamp: updatedRecord.timestamp
+        notes: updatedRecord.notes || "",
+        timestamp: Timestamp.fromDate(updatedRecord.timestamp),
+        updatedAt: serverTimestamp()
       })
 
       // Update local state
@@ -278,12 +311,22 @@ const AttendanceDashboard = ({ navigation }: any) => {
   const handleBulkMarkPresent = async () => {
     try {
       const recordsToUpdate = Array.from(selectedRecords)
-      await WorkerAttendanceService.bulkUpdateAttendanceStatus(recordsToUpdate, 'present')
+
+      // Use direct Firestore batch update
+      const batch = writeBatch(FIRESTORE_DB)
+      recordsToUpdate.forEach(recordId => {
+        const recordRef = doc(FIRESTORE_DB, "workerAttendance", recordId)
+        batch.update(recordRef, {
+          status: 'present',
+          updatedAt: serverTimestamp()
+        })
+      })
+      await batch.commit()
 
       // Update local state
       setAttendanceRecords(prev =>
         prev.map(record =>
-          selectedRecords.has(record.id) ? { ...record, status: 'present' } : record
+          selectedRecords.has(record.id || '') ? { ...record, status: 'present' as const } : record
         )
       )
 
@@ -299,12 +342,22 @@ const AttendanceDashboard = ({ navigation }: any) => {
   const handleBulkMarkAbsent = async () => {
     try {
       const recordsToUpdate = Array.from(selectedRecords)
-      await WorkerAttendanceService.bulkUpdateAttendanceStatus(recordsToUpdate, 'absent')
+
+      // Use direct Firestore batch update
+      const batch = writeBatch(FIRESTORE_DB)
+      recordsToUpdate.forEach(recordId => {
+        const recordRef = doc(FIRESTORE_DB, "workerAttendance", recordId)
+        batch.update(recordRef, {
+          status: 'absent',
+          updatedAt: serverTimestamp()
+        })
+      })
+      await batch.commit()
 
       // Update local state
       setAttendanceRecords(prev =>
         prev.map(record =>
-          selectedRecords.has(record.id) ? { ...record, status: 'absent' } : record
+          selectedRecords.has(record.id || '') ? { ...record, status: 'absent' as const } : record
         )
       )
 
