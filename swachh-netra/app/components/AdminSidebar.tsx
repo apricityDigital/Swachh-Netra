@@ -159,13 +159,6 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
           description: "Assign vehicles to contractors"
         },
         {
-          id: "connection-test",
-          title: "Connection Test",
-          icon: "link",
-          screen: "ContractorDriverConnectionTest",
-          description: "Test contractor-driver connections"
-        },
-        {
           id: "attendance-dashboard",
           title: "Attendance Dashboard",
           icon: "event-available",

@@ -13,14 +13,14 @@ import {
 } from "react-native"
 import { Card, Text } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
-import { signOut } from "firebase/auth"
-import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 import { WorkerService } from "../../../services/WorkerService"
 import FirebaseService from "../../../services/FirebaseService"
+import { useQuickLogout } from "../../hooks/useLogout"
 
 const { width } = Dimensions.get("window")
 
 const SwachhHRDashboard = ({ navigation }: any) => {
+  const { quickLogout, AlertComponent } = useQuickLogout(navigation)
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [hrStats, setHrStats] = useState({
@@ -84,7 +84,7 @@ const SwachhHRDashboard = ({ navigation }: any) => {
   const fetchDashboardData = async () => {
     setLoading(true)
     try {
-      const user = FIREBASE_AUTH.currentUser
+      const user = process.env.FIREBASE_AUTH.currentUser
       if (user) {
         // Fetch real user data
         const userData = await FirebaseService.getUserData(user.uid)
@@ -132,23 +132,7 @@ const SwachhHRDashboard = ({ navigation }: any) => {
     setRefreshing(false)
   }, [])
 
-  const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await signOut(FIREBASE_AUTH)
-            navigation.replace("Login")
-          } catch (error) {
-            Alert.alert("Error", "Failed to logout")
-          }
-        },
-      },
-    ])
-  }
+  // Remove the old handleLogout function - now using quickLogout from hook
 
   const handleAction = (screen: string) => {
     switch (screen) {
@@ -157,6 +141,9 @@ const SwachhHRDashboard = ({ navigation }: any) => {
         break
       case "WorkerAssignment":
         navigation.navigate("WorkerAssignment")
+        break
+      case "HRAttendanceDashboard":
+        navigation.navigate("HRAttendanceDashboard")
         break
       case "AttendanceTracking":
       case "PerformanceReports":
@@ -180,7 +167,7 @@ const SwachhHRDashboard = ({ navigation }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
@@ -194,7 +181,7 @@ const SwachhHRDashboard = ({ navigation }: any) => {
               <Text style={styles.roleText}>HR Manager</Text>
             </View>
           </View>
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+          <TouchableOpacity onPress={quickLogout} style={styles.logoutButton}>
             <MaterialIcons name="logout" size={20} color="#6b7280" />
           </TouchableOpacity>
         </View>
@@ -264,9 +251,9 @@ const SwachhHRDashboard = ({ navigation }: any) => {
           <Text style={styles.sectionTitle}>Quick Actions</Text>
           <View style={styles.actionsGrid}>
             {hrActions.map((action, index) => (
-              <TouchableOpacity 
-                key={index} 
-                onPress={() => handleAction(action.screen)} 
+              <TouchableOpacity
+                key={index}
+                onPress={() => handleAction(action.screen)}
                 activeOpacity={0.7}
               >
                 <Card style={styles.actionCard}>
@@ -295,7 +282,7 @@ const SwachhHRDashboard = ({ navigation }: any) => {
                 <Text style={styles.summaryTitle}>Daily Operations</Text>
                 <Text style={styles.summaryDate}>Today</Text>
               </View>
-              
+
               <View style={styles.summaryStats}>
                 <View style={styles.summaryItem}>
                   <View style={styles.summaryRow}>
@@ -331,6 +318,9 @@ const SwachhHRDashboard = ({ navigation }: any) => {
           </Card>
         </View>
       </ScrollView>
+
+      {/* Professional Alert Component */}
+      <AlertComponent />
     </SafeAreaView>
   )
 }

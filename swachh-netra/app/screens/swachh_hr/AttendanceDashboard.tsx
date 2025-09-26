@@ -11,17 +11,21 @@ import {
   Modal,
   Image,
 } from "react-native"
-import { Card, Text, Button, Chip, Searchbar } from "react-native-paper"
+import { Card, Text, Button, Chip, Searchbar, DataTable } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
-import { 
-  collection, 
-  query, 
-  where, 
-  orderBy, 
-  getDocs 
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs,
+  Timestamp
 } from 'firebase/firestore'
 import { FIRESTORE_DB } from "../../../FirebaseConfig"
 import { useRequireAuth } from "../../hooks/useRequireAuth"
+import { WorkerAttendanceService } from "../../../services/WorkerAttendanceService"
+import AdminHeader from "../../components/AdminHeader"
+import AdminSidebar from "../../components/AdminSidebar"
 
 interface AttendanceRecord {
   id: string
@@ -50,8 +54,11 @@ interface AttendanceStats {
 }
 
 const AttendanceDashboard = ({ navigation }: any) => {
-  const { userData } = useRequireAuth(navigation)
-  
+  const { userData, hasPermission } = useRequireAuth(navigation, {
+    requiredRole: 'swachh_hr',
+    requiredPermission: 'canViewAllAttendance'
+  })
+
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -66,54 +73,70 @@ const AttendanceDashboard = ({ navigation }: any) => {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null)
 
+  // Enhanced filtering states
+  const [viewMode, setViewMode] = useState<'day' | 'range' | 'monthly'>('day')
+  const [startDate, setStartDate] = useState(new Date())
+  const [endDate, setEndDate] = useState(new Date())
+  const [selectedMonth, setSelectedMonth] = useState(new Date())
+  const [employeeFilter, setEmployeeFilter] = useState("")
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [datePickerMode, setDatePickerMode] = useState<'start' | 'end' | 'single' | 'month'>('single')
+
+  // Management capabilities states
+  const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [bulkMode, setBulkMode] = useState(false)
+  const [selectedRecords, setSelectedRecords] = useState<Set<string>>(new Set())
+  const [showBulkActions, setShowBulkActions] = useState(false)
+
   useEffect(() => {
     fetchAttendanceData()
-  }, [selectedDate])
+  }, [selectedDate, startDate, endDate, selectedMonth, viewMode])
 
   useEffect(() => {
     filterRecords()
-  }, [attendanceRecords, searchQuery])
+  }, [attendanceRecords, searchQuery, employeeFilter])
 
   const fetchAttendanceData = async () => {
     try {
       setLoading(true)
-      console.log("🔄 [HR AttendanceDashboard] Fetching attendance data...")
+      console.log("🔄 [HR AttendanceDashboard] Fetching attendance data for mode:", viewMode)
 
-      // Get start and end of selected date
-      const startOfDay = new Date(selectedDate)
-      startOfDay.setHours(0, 0, 0, 0)
-      
-      const endOfDay = new Date(selectedDate)
-      endOfDay.setHours(23, 59, 59, 999)
+      let queryStartDate: Date
+      let queryEndDate: Date
 
-      const attendanceQuery = query(
-        collection(FIRESTORE_DB, "workerAttendance"),
-        where("timestamp", ">=", startOfDay),
-        where("timestamp", "<=", endOfDay),
-        orderBy("timestamp", "desc")
+      // Determine date range based on view mode
+      switch (viewMode) {
+        case 'day':
+          queryStartDate = new Date(selectedDate)
+          queryStartDate.setHours(0, 0, 0, 0)
+          queryEndDate = new Date(selectedDate)
+          queryEndDate.setHours(23, 59, 59, 999)
+          break
+        case 'range':
+          queryStartDate = new Date(startDate)
+          queryStartDate.setHours(0, 0, 0, 0)
+          queryEndDate = new Date(endDate)
+          queryEndDate.setHours(23, 59, 59, 999)
+          break
+        case 'monthly':
+          queryStartDate = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1)
+          queryEndDate = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0, 23, 59, 59, 999)
+          break
+        default:
+          queryStartDate = new Date(selectedDate)
+          queryStartDate.setHours(0, 0, 0, 0)
+          queryEndDate = new Date(selectedDate)
+          queryEndDate.setHours(23, 59, 59, 999)
+      }
+
+      // Use the enhanced service method for HR access
+      const records = await WorkerAttendanceService.getAttendanceForHRAndAdmin(
+        userData?.role || 'swachh_hr',
+        queryStartDate,
+        queryEndDate,
+        employeeFilter || undefined
       )
-
-      const attendanceSnapshot = await getDocs(attendanceQuery)
-      const records: AttendanceRecord[] = []
-
-      attendanceSnapshot.forEach((doc) => {
-        const data = doc.data()
-        records.push({
-          id: doc.id,
-          workerId: data.workerId || "",
-          workerName: data.workerName || "Unknown Worker",
-          feederPointId: data.feederPointId || "",
-          feederPointName: data.feederPointName || "Unknown Point",
-          driverId: data.driverId || "",
-          driverName: data.driverName || "Unknown Driver",
-          tripId: data.tripId || "",
-          status: data.status || "absent",
-          timestamp: data.timestamp?.toDate() || new Date(),
-          location: data.location || { latitude: 0, longitude: 0 },
-          photoUri: data.photoUri,
-          notes: data.notes
-        })
-      })
 
       setAttendanceRecords(records)
 
@@ -140,16 +163,25 @@ const AttendanceDashboard = ({ navigation }: any) => {
   }
 
   const filterRecords = () => {
-    if (!searchQuery.trim()) {
-      setFilteredRecords(attendanceRecords)
-    } else {
-      const filtered = attendanceRecords.filter(record =>
+    let filtered = attendanceRecords
+
+    // Apply search query filter
+    if (searchQuery.trim()) {
+      filtered = filtered.filter(record =>
         record.workerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         record.feederPointName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         record.driverName.toLowerCase().includes(searchQuery.toLowerCase())
       )
-      setFilteredRecords(filtered)
     }
+
+    // Apply employee filter (additional to search)
+    if (employeeFilter.trim()) {
+      filtered = filtered.filter(record =>
+        record.workerName.toLowerCase().includes(employeeFilter.toLowerCase())
+      )
+    }
+
+    setFilteredRecords(filtered)
   }
 
   const onRefresh = () => {
@@ -195,6 +227,96 @@ const AttendanceDashboard = ({ navigation }: any) => {
     setSelectedDate(newDate)
   }
 
+  // Management functions
+  const handleEditRecord = (record: AttendanceRecord) => {
+    setEditingRecord(record)
+    setShowEditModal(true)
+  }
+
+  const handleUpdateRecord = async (updatedRecord: AttendanceRecord) => {
+    try {
+      // Update the record in the database
+      await WorkerAttendanceService.updateAttendanceRecord(updatedRecord.id, {
+        status: updatedRecord.status,
+        notes: updatedRecord.notes,
+        timestamp: updatedRecord.timestamp
+      })
+
+      // Update local state
+      setAttendanceRecords(prev =>
+        prev.map(record =>
+          record.id === updatedRecord.id ? updatedRecord : record
+        )
+      )
+
+      setShowEditModal(false)
+      setEditingRecord(null)
+      Alert.alert("Success", "Attendance record updated successfully")
+    } catch (error) {
+      console.error("Error updating record:", error)
+      Alert.alert("Error", "Failed to update attendance record")
+    }
+  }
+
+  const toggleBulkMode = () => {
+    setBulkMode(!bulkMode)
+    setSelectedRecords(new Set())
+    setShowBulkActions(false)
+  }
+
+  const toggleRecordSelection = (recordId: string) => {
+    const newSelection = new Set(selectedRecords)
+    if (newSelection.has(recordId)) {
+      newSelection.delete(recordId)
+    } else {
+      newSelection.add(recordId)
+    }
+    setSelectedRecords(newSelection)
+    setShowBulkActions(newSelection.size > 0)
+  }
+
+  const handleBulkMarkPresent = async () => {
+    try {
+      const recordsToUpdate = Array.from(selectedRecords)
+      await WorkerAttendanceService.bulkUpdateAttendanceStatus(recordsToUpdate, 'present')
+
+      // Update local state
+      setAttendanceRecords(prev =>
+        prev.map(record =>
+          selectedRecords.has(record.id) ? { ...record, status: 'present' } : record
+        )
+      )
+
+      setSelectedRecords(new Set())
+      setShowBulkActions(false)
+      Alert.alert("Success", `Marked ${recordsToUpdate.length} workers as present`)
+    } catch (error) {
+      console.error("Error in bulk update:", error)
+      Alert.alert("Error", "Failed to update attendance records")
+    }
+  }
+
+  const handleBulkMarkAbsent = async () => {
+    try {
+      const recordsToUpdate = Array.from(selectedRecords)
+      await WorkerAttendanceService.bulkUpdateAttendanceStatus(recordsToUpdate, 'absent')
+
+      // Update local state
+      setAttendanceRecords(prev =>
+        prev.map(record =>
+          selectedRecords.has(record.id) ? { ...record, status: 'absent' } : record
+        )
+      )
+
+      setSelectedRecords(new Set())
+      setShowBulkActions(false)
+      Alert.alert("Success", `Marked ${recordsToUpdate.length} workers as absent`)
+    } catch (error) {
+      console.error("Error in bulk update:", error)
+      Alert.alert("Error", "Failed to update attendance records")
+    }
+  }
+
   const exportAttendanceData = () => {
     Alert.alert("Coming Soon", "Attendance export functionality will be implemented")
   }
@@ -211,7 +333,7 @@ const AttendanceDashboard = ({ navigation }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -227,36 +349,142 @@ const AttendanceDashboard = ({ navigation }: any) => {
         style={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Date Navigation */}
-        <Card style={styles.dateCard}>
-          <View style={styles.dateNavigation}>
+        {/* View Mode Selector */}
+        <Card style={styles.viewModeCard}>
+          <Text style={styles.cardTitle}>View Mode</Text>
+          <View style={styles.viewModeContainer}>
             <TouchableOpacity
-              style={styles.dateButton}
-              onPress={() => handleDateChange(-1)}
+              style={[styles.viewModeButton, viewMode === 'day' && styles.viewModeButtonActive]}
+              onPress={() => setViewMode('day')}
             >
-              <MaterialIcons name="chevron-left" size={24} color="#2563eb" />
-            </TouchableOpacity>
-            
-            <View style={styles.dateInfo}>
-              <Text style={styles.dateText}>{formatDate(selectedDate)}</Text>
-              <Text style={styles.dateSubtext}>
-                {selectedDate.toDateString() === new Date().toDateString() ? "Today" : ""}
+              <Text style={[styles.viewModeText, viewMode === 'day' && styles.viewModeTextActive]}>
+                Day
               </Text>
-            </View>
-            
+            </TouchableOpacity>
             <TouchableOpacity
-              style={styles.dateButton}
-              onPress={() => handleDateChange(1)}
-              disabled={selectedDate.toDateString() === new Date().toDateString()}
+              style={[styles.viewModeButton, viewMode === 'range' && styles.viewModeButtonActive]}
+              onPress={() => setViewMode('range')}
             >
-              <MaterialIcons 
-                name="chevron-right" 
-                size={24} 
-                color={selectedDate.toDateString() === new Date().toDateString() ? "#9ca3af" : "#2563eb"} 
-              />
+              <Text style={[styles.viewModeText, viewMode === 'range' && styles.viewModeTextActive]}>
+                Date Range
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.viewModeButton, viewMode === 'monthly' && styles.viewModeButtonActive]}
+              onPress={() => setViewMode('monthly')}
+            >
+              <Text style={[styles.viewModeText, viewMode === 'monthly' && styles.viewModeTextActive]}>
+                Monthly
+              </Text>
             </TouchableOpacity>
           </View>
         </Card>
+
+        {/* Date Navigation - Conditional based on view mode */}
+        {viewMode === 'day' && (
+          <Card style={styles.dateCard}>
+            <Text style={styles.cardTitle}>Day View</Text>
+            <View style={styles.dateNavigation}>
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => handleDateChange(-1)}
+              >
+                <MaterialIcons name="chevron-left" size={24} color="#2563eb" />
+              </TouchableOpacity>
+
+              <View style={styles.dateInfo}>
+                <Text style={styles.dateText}>{formatDate(selectedDate)}</Text>
+                <Text style={styles.dateSubtext}>
+                  {selectedDate.toDateString() === new Date().toDateString() ? "Today" : ""}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => handleDateChange(1)}
+                disabled={selectedDate.toDateString() === new Date().toDateString()}
+              >
+                <MaterialIcons
+                  name="chevron-right"
+                  size={24}
+                  color={selectedDate.toDateString() === new Date().toDateString() ? "#9ca3af" : "#2563eb"}
+                />
+              </TouchableOpacity>
+            </View>
+          </Card>
+        )}
+
+        {/* Date Range Selector */}
+        {viewMode === 'range' && (
+          <Card style={styles.dateCard}>
+            <Text style={styles.cardTitle}>Date Range</Text>
+            <View style={styles.dateRangeContainer}>
+              <TouchableOpacity
+                style={styles.dateRangeButton}
+                onPress={() => {
+                  setDatePickerMode('start')
+                  setShowDatePicker(true)
+                }}
+              >
+                <Text style={styles.dateRangeLabel}>Start Date</Text>
+                <Text style={styles.dateRangeValue}>{formatDate(startDate)}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.dateRangeButton}
+                onPress={() => {
+                  setDatePickerMode('end')
+                  setShowDatePicker(true)
+                }}
+              >
+                <Text style={styles.dateRangeLabel}>End Date</Text>
+                <Text style={styles.dateRangeValue}>{formatDate(endDate)}</Text>
+              </TouchableOpacity>
+            </View>
+          </Card>
+        )}
+
+        {/* Monthly Selector */}
+        {viewMode === 'monthly' && (
+          <Card style={styles.dateCard}>
+            <Text style={styles.cardTitle}>Monthly View</Text>
+            <View style={styles.monthNavigation}>
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => {
+                  const newMonth = new Date(selectedMonth)
+                  newMonth.setMonth(newMonth.getMonth() - 1)
+                  setSelectedMonth(newMonth)
+                }}
+              >
+                <MaterialIcons name="chevron-left" size={24} color="#2563eb" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.monthInfo}
+                onPress={() => {
+                  setDatePickerMode('month')
+                  setShowDatePicker(true)
+                }}
+              >
+                <Text style={styles.monthText}>
+                  {selectedMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.dateButton}
+                onPress={() => {
+                  const newMonth = new Date(selectedMonth)
+                  newMonth.setMonth(newMonth.getMonth() + 1)
+                  setSelectedMonth(newMonth)
+                }}
+              >
+                <MaterialIcons name="chevron-right" size={24} color="#2563eb" />
+              </TouchableOpacity>
+            </View>
+          </Card>
+        )}
 
         {/* Statistics */}
         <Card style={styles.statsCard}>
@@ -295,6 +523,87 @@ const AttendanceDashboard = ({ navigation }: any) => {
           />
         </View>
 
+        {/* Employee Filter */}
+        {hasPermission('canFilterAttendanceByEmployee') && (
+          <Card style={styles.filterCard}>
+            <Text style={styles.cardTitle}>Employee Filter</Text>
+            <View style={styles.employeeFilterContainer}>
+              <Searchbar
+                placeholder="Filter by specific employee name..."
+                onChangeText={setEmployeeFilter}
+                value={employeeFilter}
+                style={styles.employeeFilterBar}
+                icon="account-search"
+              />
+              {employeeFilter && (
+                <TouchableOpacity
+                  style={styles.clearFilterButton}
+                  onPress={() => setEmployeeFilter("")}
+                >
+                  <MaterialIcons name="clear" size={20} color="#ef4444" />
+                  <Text style={styles.clearFilterText}>Clear Filter</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </Card>
+        )}
+
+        {/* Management Controls */}
+        <Card style={styles.managementCard}>
+          <Text style={styles.cardTitle}>Management Tools</Text>
+          <View style={styles.managementControls}>
+            <TouchableOpacity
+              style={[styles.managementButton, bulkMode && styles.managementButtonActive]}
+              onPress={toggleBulkMode}
+            >
+              <MaterialIcons
+                name={bulkMode ? "check-box" : "check-box-outline-blank"}
+                size={20}
+                color={bulkMode ? "#ffffff" : "#6b7280"}
+              />
+              <Text style={[styles.managementButtonText, bulkMode && styles.managementButtonTextActive]}>
+                {bulkMode ? 'Exit Bulk Mode' : 'Bulk Edit Mode'}
+              </Text>
+            </TouchableOpacity>
+
+            {hasPermission('canExportAttendanceData') && (
+              <TouchableOpacity
+                style={styles.managementButton}
+                onPress={exportAttendanceData}
+              >
+                <MaterialIcons name="download" size={20} color="#6b7280" />
+                <Text style={styles.managementButtonText}>Export Data</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Bulk Actions */}
+          {showBulkActions && (
+            <View style={styles.bulkActionsContainer}>
+              <Text style={styles.bulkActionsTitle}>
+                {selectedRecords.size} record(s) selected
+              </Text>
+              <View style={styles.bulkActions}>
+                <TouchableOpacity
+                  style={[styles.bulkActionButton, styles.bulkActionPresent]}
+                  onPress={handleBulkMarkPresent}
+                >
+                  <MaterialIcons name="check-circle" size={16} color="#ffffff" />
+                  <Text style={styles.bulkActionText}>Mark Present</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.bulkActionButton, styles.bulkActionAbsent]}
+                  onPress={handleBulkMarkAbsent}
+                >
+                  <MaterialIcons name="cancel" size={16} color="#ffffff" />
+                  <Text style={styles.bulkActionText}>Mark Absent</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </Card>
+
         {/* Export Button */}
         <Card style={styles.actionCard}>
           <Button
@@ -310,7 +619,7 @@ const AttendanceDashboard = ({ navigation }: any) => {
         {/* Attendance Records */}
         <Card style={styles.recordsCard}>
           <Text style={styles.cardTitle}>Attendance Records ({filteredRecords.length})</Text>
-          
+
           {filteredRecords.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="event-busy" size={48} color="#9ca3af" />
@@ -322,8 +631,25 @@ const AttendanceDashboard = ({ navigation }: any) => {
           ) : (
             <View style={styles.recordsList}>
               {filteredRecords.map((record) => (
-                <View key={record.id} style={styles.recordItem}>
+                <View key={record.id} style={[
+                  styles.recordItem,
+                  selectedRecords.has(record.id) && styles.recordItemSelected
+                ]}>
                   <View style={styles.recordHeader}>
+                    {/* Bulk selection checkbox */}
+                    {bulkMode && (
+                      <TouchableOpacity
+                        style={styles.selectionCheckbox}
+                        onPress={() => toggleRecordSelection(record.id)}
+                      >
+                        <MaterialIcons
+                          name={selectedRecords.has(record.id) ? "check-box" : "check-box-outline-blank"}
+                          size={24}
+                          color={selectedRecords.has(record.id) ? "#2563eb" : "#9ca3af"}
+                        />
+                      </TouchableOpacity>
+                    )}
+
                     <View style={styles.recordInfo}>
                       <Text style={styles.workerName}>{record.workerName}</Text>
                       <Text style={styles.recordDetails}>
@@ -333,7 +659,7 @@ const AttendanceDashboard = ({ navigation }: any) => {
                         Driver: {record.driverName}
                       </Text>
                     </View>
-                    
+
                     <View style={styles.recordStatus}>
                       <MaterialIcons
                         name={getStatusIcon(record.status)}
@@ -352,9 +678,19 @@ const AttendanceDashboard = ({ navigation }: any) => {
                       >
                         {record.status.toUpperCase()}
                       </Chip>
+
+                      {/* Edit button */}
+                      {!bulkMode && hasPermission('canEditAttendanceRecords') && (
+                        <TouchableOpacity
+                          style={styles.editButton}
+                          onPress={() => handleEditRecord(record)}
+                        >
+                          <MaterialIcons name="edit" size={16} color="#6b7280" />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
-                  
+
                   {record.photoUri && (
                     <TouchableOpacity
                       style={styles.photoButton}
@@ -364,7 +700,7 @@ const AttendanceDashboard = ({ navigation }: any) => {
                       <Text style={styles.photoButtonText}>View Photo</Text>
                     </TouchableOpacity>
                   )}
-                  
+
                   {record.notes && (
                     <Text style={styles.notesText}>Notes: {record.notes}</Text>
                   )}
@@ -399,6 +735,73 @@ const AttendanceDashboard = ({ navigation }: any) => {
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* Edit Record Modal */}
+      <Modal visible={showEditModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.editModal}>
+            <Text style={styles.editModalTitle}>Edit Attendance Record</Text>
+
+            {editingRecord && (
+              <View style={styles.editForm}>
+                <Text style={styles.editFieldLabel}>Worker: {editingRecord.workerName}</Text>
+
+                <View style={styles.statusSelector}>
+                  <Text style={styles.editFieldLabel}>Status:</Text>
+                  <View style={styles.statusOptions}>
+                    <TouchableOpacity
+                      style={[
+                        styles.statusOption,
+                        editingRecord.status === 'present' && styles.statusOptionActive
+                      ]}
+                      onPress={() => setEditingRecord({
+                        ...editingRecord,
+                        status: 'present'
+                      })}
+                    >
+                      <MaterialIcons name="check-circle" size={20} color="#10b981" />
+                      <Text style={styles.statusOptionText}>Present</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.statusOption,
+                        editingRecord.status === 'absent' && styles.statusOptionActive
+                      ]}
+                      onPress={() => setEditingRecord({
+                        ...editingRecord,
+                        status: 'absent'
+                      })}
+                    >
+                      <MaterialIcons name="cancel" size={20} color="#ef4444" />
+                      <Text style={styles.statusOptionText}>Absent</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.editActions}>
+                  <TouchableOpacity
+                    style={styles.editCancelButton}
+                    onPress={() => {
+                      setShowEditModal(false)
+                      setEditingRecord(null)
+                    }}
+                  >
+                    <Text style={styles.editCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.editSaveButton}
+                    onPress={() => handleUpdateRecord(editingRecord)}
+                  >
+                    <Text style={styles.editSaveText}>Save Changes</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
         </View>
       </Modal>
     </SafeAreaView>
@@ -627,6 +1030,293 @@ const styles = StyleSheet.create({
     padding: 8,
     backgroundColor: "rgba(0,0,0,0.5)",
     borderRadius: 20,
+  },
+  // New styles for enhanced features
+  viewModeCard: {
+    margin: 16,
+    padding: 16,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  viewModeContainer: {
+    flexDirection: "row",
+    marginTop: 12,
+    borderRadius: 8,
+    backgroundColor: "#f3f4f6",
+    padding: 4,
+  },
+  viewModeButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  viewModeButtonActive: {
+    backgroundColor: "#2563eb",
+  },
+  viewModeText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#6b7280",
+  },
+  viewModeTextActive: {
+    color: "#ffffff",
+  },
+  dateRangeContainer: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 12,
+  },
+  dateRangeButton: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: "#f9fafb",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  dateRangeLabel: {
+    fontSize: 12,
+    color: "#6b7280",
+    marginBottom: 4,
+  },
+  dateRangeValue: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#111827",
+  },
+  monthNavigation: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+  },
+  monthInfo: {
+    flex: 1,
+    alignItems: "center",
+    padding: 12,
+  },
+  monthText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  filterCard: {
+    margin: 16,
+    marginTop: 8,
+    padding: 16,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  employeeFilterContainer: {
+    marginTop: 12,
+  },
+  employeeFilterBar: {
+    backgroundColor: "#f9fafb",
+    elevation: 0,
+  },
+  clearFilterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    padding: 8,
+    alignSelf: "flex-start",
+  },
+  clearFilterText: {
+    fontSize: 12,
+    color: "#ef4444",
+    marginLeft: 4,
+  },
+  // Management styles
+  managementCard: {
+    margin: 16,
+    marginTop: 8,
+    padding: 16,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  managementControls: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 12,
+  },
+  managementButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    gap: 8,
+  },
+  managementButtonActive: {
+    backgroundColor: "#2563eb",
+    borderColor: "#2563eb",
+  },
+  managementButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#6b7280",
+  },
+  managementButtonTextActive: {
+    color: "#ffffff",
+  },
+  bulkActionsContainer: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: "#f9fafb",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  bulkActionsTitle: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#374151",
+    marginBottom: 12,
+  },
+  bulkActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  bulkActionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    gap: 6,
+  },
+  bulkActionPresent: {
+    backgroundColor: "#10b981",
+  },
+  bulkActionAbsent: {
+    backgroundColor: "#ef4444",
+  },
+  bulkActionText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: "#ffffff",
+  },
+  // Record selection styles
+  recordItemSelected: {
+    backgroundColor: "#eff6ff",
+    borderColor: "#3b82f6",
+    borderWidth: 2,
+  },
+  selectionCheckbox: {
+    padding: 8,
+    marginRight: 8,
+  },
+  editButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  editModal: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 24,
+    margin: 20,
+    width: "90%",
+    maxWidth: 400,
+  },
+  editModalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  editForm: {
+    gap: 16,
+  },
+  editFieldLabel: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#374151",
+    marginBottom: 8,
+  },
+  statusSelector: {
+    gap: 8,
+  },
+  statusOptions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  statusOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: "#f9fafb",
+    borderWidth: 2,
+    borderColor: "#e5e7eb",
+    gap: 8,
+    flex: 1,
+  },
+  statusOptionActive: {
+    borderColor: "#3b82f6",
+    backgroundColor: "#eff6ff",
+  },
+  statusOptionText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#374151",
+  },
+  editActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+  },
+  editCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
+  },
+  editCancelText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#6b7280",
+  },
+  editSaveButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: "#2563eb",
+    alignItems: "center",
+  },
+  editSaveText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#ffffff",
   },
 })
 

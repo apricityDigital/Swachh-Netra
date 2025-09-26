@@ -221,7 +221,7 @@ const DriverAssignment = ({ route, navigation }: any) => {
         feederPointsCount: selectedFeederPoints.length
       })
 
-      // First, check if driver is already assigned to this contractor
+      // Validate that driver is assigned to this contractor
       const driverDoc = await getDoc(doc(FIRESTORE_DB, "users", selectedDriver.id))
       if (driverDoc.exists()) {
         const driverData = driverDoc.data()
@@ -230,6 +230,19 @@ const DriverAssignment = ({ route, navigation }: any) => {
           assignedVehicleId: driverData.assignedVehicleId,
           assignedFeederPointIds: driverData.assignedFeederPointIds
         })
+
+        // Check if driver is assigned to this contractor
+        if (driverData.contractorId !== contractorId) {
+          Alert.alert(
+            "Assignment Error",
+            "This driver is not assigned to your company. Please contact the admin to assign the driver to your company first.",
+            [{ text: "OK" }]
+          )
+          return
+        }
+      } else {
+        Alert.alert("Error", "Driver not found")
+        return
       }
 
       await ContractorService.assignVehicleToDriver(
@@ -278,7 +291,7 @@ const DriverAssignment = ({ route, navigation }: any) => {
     }
   }
 
-  const handleBulkAssignment = async (assignments: Array<{driverId: string, vehicleId: string, feederPointIds: string[]}>) => {
+  const handleBulkAssignment = async (assignments: Array<{ driverId: string, vehicleId: string, feederPointIds: string[] }>) => {
     try {
       setLoading(true)
       console.log("🔄 [DriverAssignment] Starting bulk assignment:", assignments.length, "assignments")

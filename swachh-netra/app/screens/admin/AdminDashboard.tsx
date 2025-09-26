@@ -13,18 +13,19 @@ import {
 } from "react-native"
 import { Card, Text } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
-import { signOut } from "firebase/auth"
-import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 import { ApprovalService } from "../../../services/ApprovalService"
+import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 import AdminSidebar from "../../components/AdminSidebar"
 import AdminHeader from "../../components/AdminHeader"
 import ProtectedRoute from "../../components/ProtectedRoute"
 import { useRequireAdmin } from "../../hooks/useRequireAuth"
+import { useQuickLogout } from "../../hooks/useLogout"
 
 const { width } = Dimensions.get("window")
 
 const AdminDashboard = ({ navigation }: any) => {
   const { userData } = useRequireAdmin(navigation)
+  const { quickLogout, AlertComponent } = useQuickLogout(navigation)
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [userStats, setUserStats] = useState({
@@ -72,23 +73,7 @@ const AdminDashboard = ({ navigation }: any) => {
     setRefreshing(false)
   }, [])
 
-  const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await signOut(FIREBASE_AUTH)
-            navigation.replace("Login")
-          } catch (error) {
-            Alert.alert("Error", "Failed to logout")
-          }
-        },
-      },
-    ])
-  }
+  // Remove the old handleLogout function - now using quickLogout from hook
 
   const adminActions = [
     {
@@ -214,7 +199,7 @@ const AdminDashboard = ({ navigation }: any) => {
           showMenuButton={true}
           showLogoutButton={true}
           onMenuPress={() => setSidebarVisible(true)}
-          onLogoutPress={handleLogout}
+          onLogoutPress={quickLogout}
         />
 
         <ScrollView
@@ -226,57 +211,114 @@ const AdminDashboard = ({ navigation }: any) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>System Overview</Text>
             <View style={styles.statsGrid}>
-              <Card style={styles.statCard}>
-                <View style={styles.statContent}>
-                  <View style={[styles.statIcon, { backgroundColor: '#eff6ff' }]}>
-                    <MaterialIcons name="people" size={24} color="#3b82f6" />
+              <TouchableOpacity
+                onPress={() => navigation.navigate('UserManagement')}
+                activeOpacity={0.7}
+              >
+                <Card style={styles.statCard}>
+                  <View style={styles.statContent}>
+                    <View style={[styles.statIcon, { backgroundColor: '#eff6ff' }]}>
+                      <MaterialIcons name="people" size={24} color="#3b82f6" />
+                    </View>
+                    <View style={styles.statInfo}>
+                      <Text style={styles.statNumber}>{userStats.totalUsers}</Text>
+                      <Text style={styles.statLabel}>Total Users</Text>
+                    </View>
                   </View>
-                  <View style={styles.statInfo}>
-                    <Text style={styles.statNumber}>{userStats.totalUsers}</Text>
-                    <Text style={styles.statLabel}>Total Users</Text>
-                  </View>
-                </View>
-              </Card>
+                </Card>
+              </TouchableOpacity>
 
-              <Card style={styles.statCard}>
-                <View style={styles.statContent}>
-                  <View style={[styles.statIcon, { backgroundColor: '#f0fdf4' }]}>
-                    <MaterialIcons name="check-circle" size={24} color="#10b981" />
+              <TouchableOpacity
+                onPress={() => navigation.navigate('UserManagement')}
+                activeOpacity={0.7}
+              >
+                <Card style={styles.statCard}>
+                  <View style={styles.statContent}>
+                    <View style={[styles.statIcon, { backgroundColor: '#f0fdf4' }]}>
+                      <MaterialIcons name="check-circle" size={24} color="#10b981" />
+                    </View>
+                    <View style={styles.statInfo}>
+                      <Text style={styles.statNumber}>{userStats.activeUsers}</Text>
+                      <Text style={styles.statLabel}>Active Users</Text>
+                    </View>
                   </View>
-                  <View style={styles.statInfo}>
-                    <Text style={styles.statNumber}>{userStats.activeUsers}</Text>
-                    <Text style={styles.statLabel}>Active Users</Text>
-                  </View>
-                </View>
-              </Card>
+                </Card>
+              </TouchableOpacity>
 
-              <Card style={styles.statCard}>
-                <View style={styles.statContent}>
-                  <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
-                    <MaterialIcons name="local-shipping" size={24} color="#f59e0b" />
+              <TouchableOpacity
+                onPress={() => navigation.navigate('DriverManagement')}
+                activeOpacity={0.7}
+              >
+                <Card style={styles.statCard}>
+                  <View style={styles.statContent}>
+                    <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
+                      <MaterialIcons name="local-shipping" size={24} color="#f59e0b" />
+                    </View>
+                    <View style={styles.statInfo}>
+                      <Text style={styles.statNumber}>{userStats.drivers}</Text>
+                      <Text style={styles.statLabel}>Drivers</Text>
+                    </View>
                   </View>
-                  <View style={styles.statInfo}>
-                    <Text style={styles.statNumber}>{userStats.drivers}</Text>
-                    <Text style={styles.statLabel}>Drivers</Text>
-                  </View>
-                </View>
-              </Card>
+                </Card>
+              </TouchableOpacity>
 
-              <Card style={styles.statCard}>
-                <View style={styles.statContent}>
-                  <View style={[styles.statIcon, { backgroundColor: '#fef2f2' }]}>
-                    <MaterialIcons name="pending-actions" size={24} color="#ef4444" />
+              <TouchableOpacity
+                onPress={() => navigation.navigate('WorkerApprovals')}
+                activeOpacity={0.7}
+              >
+                <Card style={styles.statCard}>
+                  <View style={styles.statContent}>
+                    <View style={[styles.statIcon, { backgroundColor: '#fef2f2' }]}>
+                      <MaterialIcons name="pending-actions" size={24} color="#ef4444" />
+                    </View>
+                    <View style={styles.statInfo}>
+                      <Text style={styles.statNumber}>{userStats.pendingApprovals}</Text>
+                      <Text style={styles.statLabel}>Pending</Text>
+                    </View>
                   </View>
-                  <View style={styles.statInfo}>
-                    <Text style={styles.statNumber}>{userStats.pendingApprovals}</Text>
-                    <Text style={styles.statLabel}>Pending</Text>
-                  </View>
-                </View>
-              </Card>
+                </Card>
+              </TouchableOpacity>
             </View>
           </View>
 
           {/* Quick Actions */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+            {Object.entries(
+              adminActions.reduce((acc, action) => {
+                if (!acc[action.category]) acc[action.category] = []
+                acc[action.category].push(action)
+                return acc
+              }, {} as Record<string, typeof adminActions>)
+            ).map(([category, actions]) => (
+              <View key={category} style={styles.categorySection}>
+                <Text style={styles.categoryTitle}>{category}</Text>
+                <View style={styles.actionsGrid}>
+                  {actions.map((action, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.actionCard}
+                      onPress={() => navigation.navigate(action.screen)}
+                      activeOpacity={0.7}
+                    >
+                      <Card style={styles.actionCard}>
+                        <View style={styles.actionContent}>
+                          <View style={[styles.actionIcon, { backgroundColor: action.bgColor }]}>
+                            <MaterialIcons name={action.icon as any} size={24} color={action.color} />
+                          </View>
+                          <View style={styles.actionInfo}>
+                            <Text style={styles.actionTitle}>{action.title}</Text>
+                            <Text style={styles.actionDescription}>{action.description}</Text>
+                          </View>
+                          <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
+                        </View>
+                      </Card>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            ))}
+          </View>
 
           {/* Role Distribution */}
           <View style={styles.section}>
@@ -334,6 +376,9 @@ const AdminDashboard = ({ navigation }: any) => {
           onClose={() => setSidebarVisible(false)}
           currentScreen="AdminDashboard"
         />
+
+        {/* Professional Alert Component */}
+        <AlertComponent />
       </SafeAreaView>
     </ProtectedRoute>
   )

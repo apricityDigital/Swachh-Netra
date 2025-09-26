@@ -13,12 +13,11 @@ import {
 } from "react-native"
 import { Card, Text, Button, Chip, Avatar } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
-import { signOut } from "firebase/auth"
-import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 import ProtectedRoute from "../../components/ProtectedRoute"
 import { useRequireAuth } from "../../hooks/useRequireAuth"
 import { DriverService, DriverDashboardData } from "../../../services/DriverService"
 import EnhancedFeederPointsList from "../../components/EnhancedFeederPointsList"
+import { useQuickLogout } from "../../hooks/useLogout"
 
 const { width } = Dimensions.get("window")
 
@@ -265,23 +264,8 @@ const DriverDashboard = ({ navigation }: any) => {
     setRefreshing(false)
   }, [])
 
-  const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await signOut(FIREBASE_AUTH)
-            navigation.replace("Login")
-          } catch (error) {
-            Alert.alert("Error", "Failed to logout")
-          }
-        },
-      },
-    ])
-  }
+  // Using professional logout - import useQuickLogout at the top
+  const { quickLogout, AlertComponent } = useQuickLogout(navigation)
 
   const handleAction = (action: string) => {
     switch (action) {
@@ -414,7 +398,7 @@ const DriverDashboard = ({ navigation }: any) => {
             >
               <MaterialIcons name="bug-report" size={20} color="#6b7280" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <TouchableOpacity onPress={quickLogout} style={styles.logoutButton}>
               <MaterialIcons name="logout" size={20} color="#6b7280" />
             </TouchableOpacity>
           </View>
@@ -778,6 +762,9 @@ const DriverDashboard = ({ navigation }: any) => {
           </Card>
         </View>
       </ScrollView>
+
+      {/* Professional Alert Component */}
+      <AlertComponent />
     </SafeAreaView>
   )
 }

@@ -18,7 +18,7 @@ import { FIRESTORE_DB } from "../../../FirebaseConfig"
 import AdminSidebar from "../../components/AdminSidebar"
 import { DriverAssignmentService, DriverAssignmentData } from "../../../services/DriverAssignmentService"
 import ProtectedRoute from "../../components/ProtectedRoute"
-import { useRequireAdmin } from "../../hooks/useRequireAuth"
+import { useRequireAdmin, useRequireAuth } from "../../hooks/useRequireAuth"
 
 interface Driver {
   id: string
@@ -45,7 +45,10 @@ interface DriverWithAssignment extends Driver {
 }
 
 const DriverAssignmentScreen = ({ navigation }: any) => {
-  const { hasAccess, userData } = useRequireAdmin(navigation)
+  const { hasAccess, userData, hasPermission } = useRequireAuth(navigation, {
+    requiredRole: 'admin',
+    requiredPermission: 'canAssignDriversToContractors'
+  })
   const [sidebarVisible, setSidebarVisible] = useState(false)
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -193,14 +196,63 @@ const DriverAssignmentScreen = ({ navigation }: any) => {
   const assignDriverToContractor = async (contractorId: string) => {
     if (!selectedDriver || !selectedDriver.id) return
 
+    // Check permission
+    if (!hasPermission('canAssignDriversToContractors')) {
+      Alert.alert("Permission Denied", "You do not have permission to assign drivers to contractors")
+      return
+    }
+
     try {
       setLoading(true)
       console.log("🔄 [DriverAssignment] Assigning driver", selectedDriver.fullName, "to contractor", contractorId)
 
-      await DriverAssignmentService.assignDriverToContractor({
+      // First validate the assignment constraints
+      const validation = await DriverAssignmentService.validateAssignmentConstraints(
+        selectedDriver.id,
+        contractorId
+      )
+
+      if (!validation.isValid) {
+        Alert.alert("Assignment Error", validation.errors.join('\n'))
+        return
+      }
+
+      // Show warnings if any
+      if (validation.warnings.length > 0) {
+        Alert.alert(
+          "Assignment Warning",
+          validation.warnings.join('\n') + "\n\nDo you want to continue?",
+          [
+            { text: "Cancel" },
+            {
+              text: "Continue",
+              onPress: () => performAssignment(contractorId)
+            }
+          ]
+        )
+      } else {
+        await performAssignment(contractorId)
+      }
+    } catch (error) {
+      console.error("❌ [DriverAssignment] Error in assignment validation:", error)
+      Alert.alert("Error", "Failed to validate assignment")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const performAssignment = async (contractorId: string) => {
+    if (!selectedDriver || !selectedDriver.id) return
+
+    try {
+      setLoading(true)
+
+      await DriverAssignmentService.adminAssignDriverToContractor({
         driverId: selectedDriver.id,
         contractorId: contractorId,
-        assignedBy: userData?.uid || 'admin'
+        assignedBy: userData?.uid || 'admin',
+        adminUserId: userData?.uid || 'admin',
+        forceReassign: false
       })
 
       Alert.alert("Success", "Driver assigned successfully", [
@@ -214,7 +266,8 @@ const DriverAssignmentScreen = ({ navigation }: any) => {
       ])
     } catch (error) {
       console.error("❌ [DriverAssignment] Error assigning driver:", error)
-      Alert.alert("Error", "Failed to assign driver")
+      const errorMessage = error instanceof Error ? error.message : "Failed to assign driver"
+      Alert.alert("Assignment Error", errorMessage)
     } finally {
       setLoading(false)
     }
@@ -367,80 +420,104 @@ const DriverAssignmentScreen = ({ navigation }: any) => {
             {filteredDrivers.length > 0 ? (
               <View style={styles.driversList}>
                 {filteredDrivers.map((driver) => (
-                  <Card key={driver.id} style={styles.driverCard}>
-                    <View style={styles.driverContent}>
-                      <View style={styles.driverInfo}>
-                        <View style={styles.driverHeader}>
-                          <View style={styles.driverAvatar}>
-                            <MaterialIcons name="person" size={24} color="#3b82f6" />
+                  <TouchableOpacity
+                    key={driver.id}
+                    activeOpacity={0.7}
+                    onPress={() => handleAssignPress(driver)}
+                  >
+                    <Card style={[styles.driverCard, driver.assignmentStatus === 'assigned' && styles.assignedDriverCard]}>
+                      <View style={styles.driverContent}>
+                        <View style={styles.driverInfo}>
+                          <View style={styles.driverHeader}>
+                            <View style={[styles.driverAvatar, { backgroundColor: driver.assignmentStatus === 'assigned' ? '#f0fdf4' : '#eff6ff' }]}>
+                              <MaterialIcons
+                                name="person"
+                                size={24}
+                                color={driver.assignmentStatus === 'assigned' ? '#10b981' : '#3b82f6'}
+                              />
+                            </View>
+                            <View style={styles.driverDetails}>
+                              <Text style={styles.driverName}>{driver.fullName}</Text>
+                              <Text style={styles.driverEmail}>{driver.email}</Text>
+                              {driver.phoneNumber && (
+                                <View style={styles.phoneContainer}>
+                                  <MaterialIcons name="phone" size={14} color="#6b7280" />
+                                  <Text style={styles.driverPhone}>{driver.phoneNumber}</Text>
+                                </View>
+                              )}
+                            </View>
+                            <View style={styles.driverStatus}>
+                              <Chip
+                                style={[
+                                  styles.statusChip,
+                                  driver.assignmentStatus === 'assigned'
+                                    ? styles.assignedChip
+                                    : styles.unassignedChip
+                                ]}
+                                textStyle={[
+                                  styles.statusChipText,
+                                  driver.assignmentStatus === 'assigned'
+                                    ? styles.assignedChipText
+                                    : styles.unassignedChipText
+                                ]}
+                              >
+                                {driver.assignmentStatus === 'assigned' ? 'Assigned' : 'Available'}
+                              </Chip>
+                            </View>
                           </View>
-                          <View style={styles.driverDetails}>
-                            <Text style={styles.driverName}>{driver.fullName}</Text>
-                            <Text style={styles.driverEmail}>{driver.email}</Text>
-                            {driver.phoneNumber && (
-                              <Text style={styles.driverPhone}>📞 {driver.phoneNumber}</Text>
-                            )}
-                          </View>
-                          <View style={styles.driverStatus}>
-                            <Chip
-                              mode="outlined"
-                              style={[
-                                styles.statusChip,
-                                driver.assignmentStatus === 'assigned'
-                                  ? styles.assignedChip
-                                  : styles.unassignedChip
-                              ]}
-                            >
-                              {driver.assignmentStatus === 'assigned' ? 'Assigned' : 'Unassigned'}
-                            </Chip>
-                          </View>
-                        </View>
 
-                        {driver.assignmentStatus === 'assigned' && driver.contractorName && (
-                          <View style={styles.contractorInfo}>
-                            <MaterialIcons name="business" size={16} color="#6b7280" />
-                            <Text style={styles.contractorText}>
-                              Assigned to: {driver.contractorName}
+                          {driver.assignmentStatus === 'assigned' && driver.contractorName && (
+                            <View style={styles.contractorInfo}>
+                              <MaterialIcons name="business" size={16} color="#6b7280" />
+                              <Text style={styles.contractorText}>
+                                Assigned to: {driver.contractorName}
+                              </Text>
+                            </View>
+                          )}
+
+                          <View style={styles.driverMeta}>
+                            <Text style={styles.metaText}>
+                              Joined: {driver.createdAt.toLocaleDateString()}
+                            </Text>
+                            <Text style={[
+                              styles.metaText,
+                              driver.isActive ? styles.activeText : styles.inactiveText
+                            ]}>
+                              {driver.isActive ? '● Active' : '● Inactive'}
                             </Text>
                           </View>
-                        )}
+                        </View>
 
-                        <View style={styles.driverMeta}>
-                          <Text style={styles.metaText}>
-                            Joined: {driver.createdAt.toLocaleDateString()}
-                          </Text>
-                          <Text style={[
-                            styles.metaText,
-                            driver.isActive ? styles.activeText : styles.inactiveText
-                          ]}>
-                            {driver.isActive ? '● Active' : '● Inactive'}
-                          </Text>
+                        <View style={styles.driverActions}>
+                          {driver.assignmentStatus === 'unassigned' ? (
+                            <TouchableOpacity
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                handleAssignPress(driver);
+                              }}
+                              style={styles.assignButton}
+                              activeOpacity={0.7}
+                            >
+                              <MaterialIcons name="person-add" size={18} color="#ffffff" />
+                              <Text style={styles.assignButtonText}>Assign to Contractor</Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                unassignDriver(driver);
+                              }}
+                              style={styles.unassignButton}
+                              activeOpacity={0.7}
+                            >
+                              <MaterialIcons name="person-remove" size={18} color="#ef4444" />
+                              <Text style={styles.unassignButtonText}>Unassign</Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
                       </View>
-
-                      <View style={styles.driverActions}>
-                        {driver.assignmentStatus === 'unassigned' ? (
-                          <Button
-                            mode="contained"
-                            onPress={() => handleAssignPress(driver)}
-                            style={styles.assignButton}
-                            icon="person-add"
-                          >
-                            Assign
-                          </Button>
-                        ) : (
-                          <Button
-                            mode="outlined"
-                            onPress={() => unassignDriver(driver)}
-                            style={styles.unassignButton}
-                            icon="person-remove"
-                          >
-                            Unassign
-                          </Button>
-                        )}
-                      </View>
-                    </View>
-                  </Card>
+                    </Card>
+                  </TouchableOpacity>
                 ))}
               </View>
             ) : (
@@ -485,29 +562,43 @@ const DriverAssignmentScreen = ({ navigation }: any) => {
                 </TouchableOpacity>
               </View>
 
-              <ScrollView style={styles.contractorList} showsVerticalScrollIndicator={false}>
-                {contractors.map((contractor) => (
-                  <TouchableOpacity
-                    key={contractor.id}
-                    style={styles.contractorItem}
-                    onPress={() => assignDriverToContractor(contractor.id)}
-                  >
-                    <View style={styles.contractorInfo}>
-                      <View style={styles.contractorAvatar}>
-                        <MaterialIcons name="business" size={24} color="#3b82f6" />
-                      </View>
-                      <View style={styles.contractorDetails}>
-                        <Text style={styles.contractorName}>{contractor.fullName}</Text>
-                        <Text style={styles.contractorEmail}>{contractor.email}</Text>
-                        <Text style={styles.contractorDrivers}>
-                          {contractor.assignedDrivers} drivers assigned
-                        </Text>
-                      </View>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              <View style={styles.modalBody}>
+                <Text style={styles.modalSubtitle}>
+                  Select a contractor to assign {selectedDriver?.fullName}
+                </Text>
+
+                <ScrollView style={styles.contractorList} showsVerticalScrollIndicator={false}>
+                  {contractors.map((contractor) => (
+                    <TouchableOpacity
+                      key={contractor.id}
+                      style={styles.contractorItem}
+                      onPress={() => assignDriverToContractor(contractor.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Card style={styles.contractorCard}>
+                        <View style={styles.contractorContent}>
+                          <View style={styles.contractorAvatar}>
+                            <MaterialIcons name="business" size={24} color="#3b82f6" />
+                          </View>
+                          <View style={styles.contractorDetails}>
+                            <Text style={styles.contractorName}>{contractor.fullName}</Text>
+                            <Text style={styles.contractorEmail}>{contractor.email}</Text>
+                            <View style={styles.contractorStats}>
+                              <MaterialIcons name="group" size={14} color="#6b7280" />
+                              <Text style={styles.contractorDrivers}>
+                                {contractor.assignedDrivers || 0} drivers assigned
+                              </Text>
+                            </View>
+                          </View>
+                          <View style={styles.contractorAction}>
+                            <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
+                          </View>
+                        </View>
+                      </Card>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
 
               {contractors.length === 0 && (
                 <View style={styles.emptyContractors}>
@@ -642,7 +733,19 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   driverCard: {
-    marginBottom: 8,
+    marginBottom: 12,
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: "#f3f4f6",
+  },
+  assignedDriverCard: {
+    borderColor: "#d1fae5",
+    backgroundColor: "#f9fffe",
   },
   driverContent: {
     padding: 16,
@@ -678,9 +781,16 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginBottom: 2,
   },
+  phoneContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
   driverPhone: {
     fontSize: 12,
-    color: "#9ca3af",
+    color: "#6b7280",
+    fontWeight: "400",
   },
   driverStatus: {
     marginLeft: 8,
@@ -688,13 +798,23 @@ const styles = StyleSheet.create({
   statusChip: {
     height: 28,
   },
+  statusChipText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
   assignedChip: {
     backgroundColor: "#dcfce7",
     borderColor: "#10b981",
   },
+  assignedChipText: {
+    color: "#10b981",
+  },
   unassignedChip: {
     backgroundColor: "#fef3c7",
     borderColor: "#f59e0b",
+  },
+  unassignedChipText: {
+    color: "#f59e0b",
   },
   contractorInfo: {
     flexDirection: "row",
@@ -727,9 +847,35 @@ const styles = StyleSheet.create({
   },
   assignButton: {
     backgroundColor: "#3b82f6",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 6,
+  },
+  assignButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#ffffff",
   },
   unassignButton: {
-    borderColor: "#ef4444",
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 6,
+  },
+  unassignButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#ef4444",
   },
   // Empty state styles
   emptyCard: {
@@ -780,17 +926,33 @@ const styles = StyleSheet.create({
   closeButton: {
     padding: 8,
   },
+  modalBody: {
+    padding: 20,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginBottom: 16,
+    textAlign: "center",
+  },
   contractorList: {
     maxHeight: 400,
-    paddingHorizontal: 20,
   },
   contractorItem: {
+    marginBottom: 12,
+  },
+  contractorCard: {
+    borderRadius: 12,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  contractorContent: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f3f4f6",
+    padding: 16,
   },
   contractorAvatar: {
     width: 40,
@@ -815,9 +977,19 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginBottom: 2,
   },
+  contractorStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 2,
+  },
   contractorDrivers: {
     fontSize: 12,
-    color: "#9ca3af",
+    color: "#6b7280",
+    fontWeight: "400",
+  },
+  contractorAction: {
+    marginLeft: 8,
   },
   emptyContractors: {
     padding: 40,

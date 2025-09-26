@@ -1,15 +1,15 @@
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  getDoc, 
-  getDocs, 
-  query, 
-  where, 
-  orderBy, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  orderBy,
   serverTimestamp,
-  Timestamp 
+  Timestamp
 } from 'firebase/firestore'
 import { FIRESTORE_DB } from '../FirebaseConfig'
 import * as Location from 'expo-location'
@@ -67,9 +67,9 @@ export class LocationBasedTripService {
 
   // Calculate distance between two coordinates using Haversine formula
   static calculateDistance(
-    lat1: number, 
-    lon1: number, 
-    lat2: number, 
+    lat1: number,
+    lon1: number,
+    lat2: number,
     lon2: number
   ): number {
     const R = 6371e3 // Earth's radius in meters
@@ -78,10 +78,10 @@ export class LocationBasedTripService {
     const Δφ = (lat2 - lat1) * Math.PI / 180
     const Δλ = (lon2 - lon1) * Math.PI / 180
 
-    const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ/2) * Math.sin(Δλ/2)
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+      Math.cos(φ1) * Math.cos(φ2) *
+      Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 
     return R * c // Distance in meters
   }
@@ -93,18 +93,18 @@ export class LocationBasedTripService {
   ): Promise<{ isWithinRange: boolean; distance: number; feederPoint: any }> {
     try {
       console.log("🔍 [LocationBasedTripService] Checking proximity to feeder point:", feederPointId)
-      
+
       const feederPointDoc = await getDoc(doc(FIRESTORE_DB, "feederPoints", feederPointId))
       if (!feederPointDoc.exists()) {
         throw new Error("Feeder point not found")
       }
 
       const feederPointData = feederPointDoc.data()
-      
+
       // Check if feeder point has GPS coordinates
-      if (!feederPointData.gpsCoordinates || 
-          !feederPointData.gpsCoordinates.latitude || 
-          !feederPointData.gpsCoordinates.longitude) {
+      if (!feederPointData.gpsCoordinates ||
+        !feederPointData.gpsCoordinates.latitude ||
+        !feederPointData.gpsCoordinates.longitude) {
         console.warn("⚠️ [LocationBasedTripService] Feeder point has no GPS coordinates, allowing trip start")
         return {
           isWithinRange: true,
@@ -137,7 +137,7 @@ export class LocationBasedTripService {
   static async getCurrentLocation(): Promise<LocationData> {
     try {
       console.log("📍 [LocationBasedTripService] Getting current location...")
-      
+
       const { status } = await Location.requestForegroundPermissionsAsync()
       if (status !== 'granted') {
         throw new Error('Location permission not granted')
@@ -173,20 +173,20 @@ export class LocationBasedTripService {
   static async getAssignedWorkers(feederPointId: string): Promise<any[]> {
     try {
       console.log("👥 [LocationBasedTripService] Getting assigned workers for feeder point:", feederPointId)
-      
+
       // Get workers from the workers collection who are assigned to this feeder point
       const workersQuery = query(
         collection(FIRESTORE_DB, "workers"),
         where("isActive", "==", true)
       )
-      
+
       const workersSnapshot = await getDocs(workersQuery)
       const assignedWorkers: any[] = []
-      
+
       workersSnapshot.forEach((doc) => {
         const data = doc.data()
         const assignedFeederPointIds = Array.isArray(data.assignedFeederPointIds) ? data.assignedFeederPointIds : []
-        
+
         if (assignedFeederPointIds.includes(feederPointId)) {
           assignedWorkers.push({
             id: doc.id,
@@ -201,7 +201,7 @@ export class LocationBasedTripService {
           })
         }
       })
-      
+
       console.log(`✅ [LocationBasedTripService] Found ${assignedWorkers.length} assigned workers`)
       return assignedWorkers
     } catch (error) {
@@ -221,18 +221,18 @@ export class LocationBasedTripService {
   ): Promise<string> {
     try {
       console.log("🚀 [LocationBasedTripService] Starting trip session...")
-      
+
       // Get feeder point details
       const feederPointDoc = await getDoc(doc(FIRESTORE_DB, "feederPoints", feederPointId))
       if (!feederPointDoc.exists()) {
         throw new Error("Feeder point not found")
       }
-      
+
       const feederPointData = feederPointDoc.data()
-      
+
       // Get assigned workers count
       const assignedWorkers = await this.getAssignedWorkers(feederPointId)
-      
+
       const tripSession: Omit<TripSession, "id"> = {
         driverId,
         driverName,
@@ -252,9 +252,9 @@ export class LocationBasedTripService {
         createdAt: new Date(),
         updatedAt: new Date()
       }
-      
+
       const docRef = await addDoc(collection(FIRESTORE_DB, "tripSessions"), tripSession)
-      
+
       console.log("✅ [LocationBasedTripService] Trip session started:", docRef.id)
       return docRef.id
     } catch (error) {
@@ -279,36 +279,48 @@ export class LocationBasedTripService {
   ): Promise<string> {
     try {
       console.log(`📝 [LocationBasedTripService] Recording attendance for ${workerName}: ${status}`)
-      
-      const attendanceRecord: Omit<WorkerAttendanceRecord, "id"> = {
-        workerId,
-        workerName,
-        feederPointId,
-        feederPointName,
-        driverId,
-        driverName,
-        tripId,
+
+      // Validate and sanitize data before submitting to Firestore
+      const sanitizedData = {
+        workerId: workerId || "",
+        workerName: workerName || "",
+        feederPointId: feederPointId || "",
+        feederPointName: feederPointName || "",
+        driverId: driverId || "",
+        driverName: driverName || "",
+        tripId: tripId || "",
         status,
         timestamp: new Date(),
-        location,
-        photoUri,
-        notes,
+        location: location || { latitude: 0, longitude: 0, timestamp: new Date() },
+        photoUri: photoUri || null, // Use null instead of undefined for optional fields
+        notes: notes || "", // Default to empty string instead of undefined
         createdAt: new Date(),
         updatedAt: new Date()
       }
-      
+
+      console.log("📋 [LocationBasedTripService] Sanitized attendance data:", {
+        workerId: sanitizedData.workerId,
+        workerName: sanitizedData.workerName,
+        status: sanitizedData.status,
+        hasPhoto: !!sanitizedData.photoUri,
+        hasNotes: !!sanitizedData.notes,
+        hasLocation: !!sanitizedData.location
+      })
+
+      const attendanceRecord: Omit<WorkerAttendanceRecord, "id"> = sanitizedData
+
       const docRef = await addDoc(collection(FIRESTORE_DB, "workerAttendance"), attendanceRecord)
-      
+
       // Update trip session with attendance record
       const tripRef = doc(FIRESTORE_DB, "tripSessions", tripId)
       const tripDoc = await getDoc(tripRef)
-      
+
       if (tripDoc.exists()) {
         const tripData = tripDoc.data()
         const updatedRecords = [...(tripData.workerAttendanceRecords || []), docRef.id]
         const presentCount = status === 'present' ? (tripData.presentWorkers || 0) + 1 : (tripData.presentWorkers || 0)
         const absentCount = status === 'absent' ? (tripData.absentWorkers || 0) + 1 : (tripData.absentWorkers || 0)
-        
+
         await updateDoc(tripRef, {
           workerAttendanceRecords: updatedRecords,
           presentWorkers: presentCount,
@@ -317,7 +329,7 @@ export class LocationBasedTripService {
           updatedAt: serverTimestamp()
         })
       }
-      
+
       console.log("✅ [LocationBasedTripService] Attendance recorded:", docRef.id)
       return docRef.id
     } catch (error) {
@@ -334,10 +346,10 @@ export class LocationBasedTripService {
         where("tripId", "==", tripId),
         orderBy("timestamp", "desc")
       )
-      
+
       const attendanceSnapshot = await getDocs(attendanceQuery)
       const records: WorkerAttendanceRecord[] = []
-      
+
       attendanceSnapshot.forEach((doc) => {
         const data = doc.data()
         records.push({
@@ -348,7 +360,7 @@ export class LocationBasedTripService {
           updatedAt: data.updatedAt?.toDate() || new Date()
         } as WorkerAttendanceRecord)
       })
-      
+
       return records
     } catch (error) {
       console.error("❌ [LocationBasedTripService] Error getting attendance records:", error)
@@ -360,7 +372,7 @@ export class LocationBasedTripService {
   static async completeTripSession(tripId: string, endLocation: LocationData): Promise<void> {
     try {
       console.log("🏁 [LocationBasedTripService] Completing trip session:", tripId)
-      
+
       const tripRef = doc(FIRESTORE_DB, "tripSessions", tripId)
       await updateDoc(tripRef, {
         endLocation,
@@ -368,7 +380,7 @@ export class LocationBasedTripService {
         status: 'completed',
         updatedAt: serverTimestamp()
       })
-      
+
       console.log("✅ [LocationBasedTripService] Trip session completed")
     } catch (error) {
       console.error("❌ [LocationBasedTripService] Error completing trip session:", error)

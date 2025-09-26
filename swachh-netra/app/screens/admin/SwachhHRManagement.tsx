@@ -486,93 +486,107 @@ const SwachhHRManagement = ({ navigation }: { navigation: any }) => {
 
   // User card rendering
   const renderUserCard = ({ item }: { item: SwachhHRUser }) => (
-    <Card style={styles.userCard}>
-      <View style={styles.userContent}>
-        <View style={styles.userHeader}>
-          {bulkMode && (
+    <TouchableOpacity
+      onPress={() => handleEditUser(item)}
+      activeOpacity={0.7}
+    >
+      <Card style={styles.userCard}>
+        <View style={styles.userContent}>
+          <View style={styles.userHeader}>
+            {bulkMode && (
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={() => toggleUserSelection(item.uid)}
+              >
+                <MaterialIcons
+                  name={selectedUsers.has(item.uid) ? "check-box" : "check-box-outline-blank"}
+                  size={24}
+                  color={selectedUsers.has(item.uid) ? "#2563eb" : "#9ca3af"}
+                />
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.userInfo}>
+              <Text style={styles.userName}>{item.fullName}</Text>
+              <Text style={styles.userEmail}>{item.email}</Text>
+              <Text style={styles.userDepartment}>
+                <MaterialIcons name="business" size={14} color="#6b7280" />
+                {" "}{item.department || "General"}
+              </Text>
+            </View>
+
+            <View style={styles.userBadges}>
+              <Chip
+                style={[
+                  styles.statusChip,
+                  { backgroundColor: item.isActive ? "#f0fdf4" : "#fef2f2" }
+                ]}
+                textStyle={[
+                  styles.statusChipText,
+                  { color: item.isActive ? "#059669" : "#dc2626" }
+                ]}
+              >
+                {item.isActive ? "Active" : "Inactive"}
+              </Chip>
+            </View>
+          </View>
+
+          <View style={styles.userDetails}>
+            <View style={styles.userDetailRow}>
+              <MaterialIcons name="phone" size={14} color="#6b7280" />
+              <Text style={styles.userPhone}>{item.phone || "No phone"}</Text>
+            </View>
+            {item.lastLogin && item.lastLogin !== "Never" && (
+              <View style={styles.userDetailRow}>
+                <MaterialIcons name="access-time" size={14} color="#6b7280" />
+                <Text style={styles.lastLogin}>Last login: {new Date(item.lastLogin).toLocaleDateString()}</Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.userActions}>
             <TouchableOpacity
-              style={styles.checkboxContainer}
-              onPress={() => toggleUserSelection(item.uid)}
+              style={[styles.actionButton, styles.editButton]}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleEditUser(item);
+              }}
+            >
+              <MaterialIcons name="edit" size={16} color="#2563eb" />
+              <Text style={[styles.actionButtonText, { color: "#2563eb" }]}>Edit</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButton, styles.statusButton]}
+              onPress={(e) => {
+                e.stopPropagation();
+                toggleUserStatus(item);
+              }}
             >
               <MaterialIcons
-                name={selectedUsers.has(item.uid) ? "check-box" : "check-box-outline-blank"}
-                size={24}
-                color={selectedUsers.has(item.uid) ? "#2563eb" : "#9ca3af"}
+                name={item.isActive ? "pause" : "play-arrow"}
+                size={16}
+                color={item.isActive ? "#d97706" : "#059669"}
               />
+              <Text style={[styles.actionButtonText, { color: item.isActive ? "#d97706" : "#059669" }]}>
+                {item.isActive ? "Deactivate" : "Activate"}
+              </Text>
             </TouchableOpacity>
-          )}
 
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>{item.fullName}</Text>
-            <Text style={styles.userEmail}>{item.email}</Text>
-            <Text style={styles.userDepartment}>
-              <MaterialIcons name="business" size={14} color="#6b7280" />
-              {" "}{item.department || "General"}
-            </Text>
-          </View>
-
-          <View style={styles.userBadges}>
-            <Chip
-              style={[
-                styles.statusChip,
-                { backgroundColor: item.isActive ? "#f0fdf4" : "#fef2f2" }
-              ]}
-              textStyle={[
-                styles.statusChipText,
-                { color: item.isActive ? "#059669" : "#dc2626" }
-              ]}
+            <TouchableOpacity
+              style={[styles.actionButton, styles.deleteButton]}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleDeleteUser(item);
+              }}
             >
-              {item.isActive ? "Active" : "Inactive"}
-            </Chip>
+              <MaterialIcons name="person-off" size={16} color="#dc2626" />
+              <Text style={[styles.actionButtonText, { color: "#dc2626" }]}>Remove</Text>
+            </TouchableOpacity>
           </View>
         </View>
-
-        <View style={styles.userDetails}>
-          <View style={styles.userDetailRow}>
-            <MaterialIcons name="phone" size={14} color="#6b7280" />
-            <Text style={styles.userPhone}>{item.phone || "No phone"}</Text>
-          </View>
-          {item.lastLogin && item.lastLogin !== "Never" && (
-            <View style={styles.userDetailRow}>
-              <MaterialIcons name="access-time" size={14} color="#6b7280" />
-              <Text style={styles.lastLogin}>Last login: {new Date(item.lastLogin).toLocaleDateString()}</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.userActions}>
-          <TouchableOpacity
-            style={[styles.actionButton, styles.editButton]}
-            onPress={() => handleEditUser(item)}
-          >
-            <MaterialIcons name="edit" size={16} color="#2563eb" />
-            <Text style={[styles.actionButtonText, { color: "#2563eb" }]}>Edit</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.statusButton]}
-            onPress={() => toggleUserStatus(item)}
-          >
-            <MaterialIcons
-              name={item.isActive ? "pause" : "play-arrow"}
-              size={16}
-              color={item.isActive ? "#d97706" : "#059669"}
-            />
-            <Text style={[styles.actionButtonText, { color: item.isActive ? "#d97706" : "#059669" }]}>
-              {item.isActive ? "Deactivate" : "Activate"}
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionButton, styles.deleteButton]}
-            onPress={() => handleDeleteUser(item)}
-          >
-            <MaterialIcons name="person-off" size={16} color="#dc2626" />
-            <Text style={[styles.actionButtonText, { color: "#dc2626" }]}>Remove</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Card>
+      </Card>
+    </TouchableOpacity>
   )
 
   if (loading) {
@@ -644,53 +658,73 @@ const SwachhHRManagement = ({ navigation }: { navigation: any }) => {
               <Text style={styles.sectionTitle}>Staff Overview</Text>
             </View>
             <View style={styles.statsGrid}>
-              <Card style={styles.statCard}>
-                <View style={styles.statContent}>
-                  <View style={[styles.statIconContainer, { backgroundColor: "#eff6ff" }]}>
-                    <MaterialIcons name="group" size={24} color="#2563eb" />
+              <TouchableOpacity
+                onPress={() => setFilters(prev => ({ ...prev, status: 'all' }))}
+                activeOpacity={0.7}
+              >
+                <Card style={styles.statCard}>
+                  <View style={styles.statContent}>
+                    <View style={[styles.statIconContainer, { backgroundColor: "#eff6ff" }]}>
+                      <MaterialIcons name="group" size={24} color="#2563eb" />
+                    </View>
+                    <View style={styles.statInfo}>
+                      <Text style={styles.statNumber}>{statistics.totalStaff}</Text>
+                      <Text style={styles.statLabel}>Total Staff</Text>
+                    </View>
                   </View>
-                  <View style={styles.statInfo}>
-                    <Text style={styles.statNumber}>{statistics.totalStaff}</Text>
-                    <Text style={styles.statLabel}>Total Staff</Text>
-                  </View>
-                </View>
-              </Card>
+                </Card>
+              </TouchableOpacity>
 
-              <Card style={styles.statCard}>
-                <View style={styles.statContent}>
-                  <View style={[styles.statIconContainer, { backgroundColor: "#f0fdf4" }]}>
-                    <MaterialIcons name="check-circle" size={24} color="#059669" />
+              <TouchableOpacity
+                onPress={() => setFilters(prev => ({ ...prev, status: 'active' }))}
+                activeOpacity={0.7}
+              >
+                <Card style={styles.statCard}>
+                  <View style={styles.statContent}>
+                    <View style={[styles.statIconContainer, { backgroundColor: "#f0fdf4" }]}>
+                      <MaterialIcons name="check-circle" size={24} color="#059669" />
+                    </View>
+                    <View style={styles.statInfo}>
+                      <Text style={styles.statNumber}>{statistics.activeUsers}</Text>
+                      <Text style={styles.statLabel}>Active</Text>
+                    </View>
                   </View>
-                  <View style={styles.statInfo}>
-                    <Text style={styles.statNumber}>{statistics.activeUsers}</Text>
-                    <Text style={styles.statLabel}>Active</Text>
-                  </View>
-                </View>
-              </Card>
+                </Card>
+              </TouchableOpacity>
 
-              <Card style={styles.statCard}>
-                <View style={styles.statContent}>
-                  <View style={[styles.statIconContainer, { backgroundColor: "#fffbeb" }]}>
-                    <MaterialIcons name="business" size={24} color="#d97706" />
+              <TouchableOpacity
+                onPress={() => Alert.alert('Departments', 'Department management coming soon')}
+                activeOpacity={0.7}
+              >
+                <Card style={styles.statCard}>
+                  <View style={styles.statContent}>
+                    <View style={[styles.statIconContainer, { backgroundColor: "#fffbeb" }]}>
+                      <MaterialIcons name="business" size={24} color="#d97706" />
+                    </View>
+                    <View style={styles.statInfo}>
+                      <Text style={styles.statNumber}>{statistics.departments}</Text>
+                      <Text style={styles.statLabel}>Departments</Text>
+                    </View>
                   </View>
-                  <View style={styles.statInfo}>
-                    <Text style={styles.statNumber}>{statistics.departments}</Text>
-                    <Text style={styles.statLabel}>Departments</Text>
-                  </View>
-                </View>
-              </Card>
+                </Card>
+              </TouchableOpacity>
 
-              <Card style={styles.statCard}>
-                <View style={styles.statContent}>
-                  <View style={[styles.statIconContainer, { backgroundColor: "#fef2f2" }]}>
-                    <MaterialIcons name="access-time" size={24} color="#dc2626" />
+              <TouchableOpacity
+                onPress={() => Alert.alert('Recent Logins', 'Login analytics coming soon')}
+                activeOpacity={0.7}
+              >
+                <Card style={styles.statCard}>
+                  <View style={styles.statContent}>
+                    <View style={[styles.statIconContainer, { backgroundColor: "#fef2f2" }]}>
+                      <MaterialIcons name="access-time" size={24} color="#dc2626" />
+                    </View>
+                    <View style={styles.statInfo}>
+                      <Text style={styles.statNumber}>{statistics.recentLogins}</Text>
+                      <Text style={styles.statLabel}>Recent Logins</Text>
+                    </View>
                   </View>
-                  <View style={styles.statInfo}>
-                    <Text style={styles.statNumber}>{statistics.recentLogins}</Text>
-                    <Text style={styles.statLabel}>Recent Logins</Text>
-                  </View>
-                </View>
-              </Card>
+                </Card>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -1212,7 +1246,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#111827",
     marginLeft: SPACING.sm,
-    flex: 1,
+    lineHeight: 22,
   },
 
   // Header styles - Perfect alignment
@@ -1306,14 +1340,13 @@ const styles = StyleSheet.create({
   // Statistics grid
   statsGrid: {
     flexDirection: "row",
-    flexWrap: "wrap",
     justifyContent: "space-between",
-    marginHorizontal: -SPACING.xs,   // Negative margin for consistent spacing
+    marginHorizontal: -SPACING.sm,   // Negative margin for consistent spacing
   },
   statCard: {
-    width: "48%", // Precise width for 2-column layout
-    marginHorizontal: SPACING.xs,
-    marginBottom: SPACING.lg,
+    width: "60%", // Increased width for better content fit
+    marginHorizontal: SPACING.sm,
+    marginBottom: SPACING.md,
     borderRadius: SPACING.md,
     backgroundColor: "#ffffff",
     elevation: 2,
@@ -1321,15 +1354,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-    // Ensure consistent height
-    minHeight: 100,
-    
+    height: 100, // Fixed height for consistent appearance
   },
   statContent: {
     flexDirection: "row",
     alignItems: "center",
     padding: SPACING.lg,
-    minHeight: 80, // Consistent stat card content height
+    height: "100%", // Fill the entire card height
   },
   statIconContainer: {
     width: 48,
@@ -1488,6 +1519,8 @@ const styles = StyleSheet.create({
   listActions: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
+    gap: SPACING.sm,
   },
   bulkToggleButton: {
     flexDirection: "row",
@@ -1672,6 +1705,8 @@ const styles = StyleSheet.create({
   userActions: {
     flexDirection: "row",
     justifyContent: "space-between",
+    flexWrap: "wrap",
+    gap: SPACING.sm,
     paddingTop: SPACING.md,
     borderTopWidth: 1,
     borderTopColor: "#f3f4f6",
@@ -1684,9 +1719,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.md,
     borderRadius: SPACING.sm,
     backgroundColor: "#f9fafb",
-    flex: 1, // Equal width buttons
-    minHeight: 36, // Consistent button height
-    marginHorizontal: SPACING.xs, // Add spacing between buttons
+    flexBasis: "32%",
+    minWidth: "30%",
+    minHeight: 36,
+    marginHorizontal: SPACING.xs,
+    marginTop: SPACING.xs,
   },
   editButton: {
     backgroundColor: "#eff6ff",

@@ -71,6 +71,8 @@ const UserManagement = ({ navigation }: any) => {
     const [showRoleModal, setShowRoleModal] = useState(false);
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [newRole, setNewRole] = useState('');
+    const [showUserDetailModal, setShowUserDetailModal] = useState(false);
+    const [selectedUserDetail, setSelectedUserDetail] = useState<User | null>(null);
     const [userStats, setUserStats] = useState({
         totalUsers: 0,
         activeUsers: 0,
@@ -208,6 +210,35 @@ const UserManagement = ({ navigation }: any) => {
         setShowRoleModal(true);
     };
 
+    const openUserDetailModal = (user: User) => {
+        setSelectedUserDetail(user);
+        setShowUserDetailModal(true);
+    };
+
+    const deleteUser = async (user: User) => {
+        Alert.alert(
+            'Delete User',
+            `Are you sure you want to permanently delete ${user.fullName}? This action cannot be undone.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await deleteDoc(doc(FIRESTORE_DB, 'users', user.id));
+                            Alert.alert('Success', 'User deleted successfully');
+                            fetchUsers();
+                        } catch (error) {
+                            console.error('Error deleting user:', error);
+                            Alert.alert('Error', 'Failed to delete user');
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
     const updateUserRole = async () => {
         if (!selectedUser || !newRole) return;
 
@@ -236,53 +267,83 @@ const UserManagement = ({ navigation }: any) => {
     const renderOverviewTab = () => (
         <View style={styles.tabContent}>
             <View style={styles.statsGrid}>
-                <Card style={styles.statCard}>
-                    <LinearGradient colors={['#3b82f6', '#1d4ed8']} style={styles.statGradient}>
-                        <MaterialIcons name="people" size={32} color="#fff" />
-                        <Text style={styles.statNumber}>{userStats.totalUsers}</Text>
-                        <Text style={styles.statLabel}>Total Users</Text>
-                    </LinearGradient>
-                </Card>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => { setSelectedTab('users'); setRoleFilter('all'); setStatusFilter('all'); }}
+                >
+                    <Card style={styles.statCard}>
+                        <LinearGradient colors={['#3b82f6', '#1d4ed8']} style={styles.statGradient}>
+                            <MaterialIcons name="people" size={32} color="#fff" />
+                            <Text style={styles.statNumber}>{userStats.totalUsers}</Text>
+                            <Text style={styles.statLabel}>Total Users</Text>
+                        </LinearGradient>
+                    </Card>
+                </TouchableOpacity>
 
-                <Card style={styles.statCard}>
-                    <LinearGradient colors={['#10b981', '#059669']} style={styles.statGradient}>
-                        <MaterialIcons name="check-circle" size={32} color="#fff" />
-                        <Text style={styles.statNumber}>{userStats.activeUsers}</Text>
-                        <Text style={styles.statLabel}>Active Users</Text>
-                    </LinearGradient>
-                </Card>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => { setSelectedTab('users'); setStatusFilter('active'); }}
+                >
+                    <Card style={styles.statCard}>
+                        <LinearGradient colors={['#10b981', '#059669']} style={styles.statGradient}>
+                            <MaterialIcons name="check-circle" size={32} color="#fff" />
+                            <Text style={styles.statNumber}>{userStats.activeUsers}</Text>
+                            <Text style={styles.statLabel}>Active Users</Text>
+                        </LinearGradient>
+                    </Card>
+                </TouchableOpacity>
 
-                <Card style={styles.statCard}>
-                    <LinearGradient colors={['#f59e0b', '#d97706']} style={styles.statGradient}>
-                        <MaterialIcons name="local-shipping" size={32} color="#fff" />
-                        <Text style={styles.statNumber}>{userStats.drivers}</Text>
-                        <Text style={styles.statLabel}>Drivers</Text>
-                    </LinearGradient>
-                </Card>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => { setSelectedTab('users'); setRoleFilter('driver'); }}
+                >
+                    <Card style={styles.statCard}>
+                        <LinearGradient colors={['#f59e0b', '#d97706']} style={styles.statGradient}>
+                            <MaterialIcons name="local-shipping" size={32} color="#fff" />
+                            <Text style={styles.statNumber}>{userStats.drivers}</Text>
+                            <Text style={styles.statLabel}>Drivers</Text>
+                        </LinearGradient>
+                    </Card>
+                </TouchableOpacity>
 
-                <Card style={styles.statCard}>
-                    <LinearGradient colors={['#8b5cf6', '#7c3aed']} style={styles.statGradient}>
-                        <MaterialIcons name="engineering" size={32} color="#fff" />
-                        <Text style={styles.statNumber}>{userStats.contractors}</Text>
-                        <Text style={styles.statLabel}>Contractors</Text>
-                    </LinearGradient>
-                </Card>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => { setSelectedTab('users'); setRoleFilter('transport_contractor'); }}
+                >
+                    <Card style={styles.statCard}>
+                        <LinearGradient colors={['#8b5cf6', '#7c3aed']} style={styles.statGradient}>
+                            <MaterialIcons name="engineering" size={32} color="#fff" />
+                            <Text style={styles.statNumber}>{userStats.contractors}</Text>
+                            <Text style={styles.statLabel}>Contractors</Text>
+                        </LinearGradient>
+                    </Card>
+                </TouchableOpacity>
 
-                <Card style={styles.statCard}>
-                    <LinearGradient colors={['#ef4444', '#dc2626']} style={styles.statGradient}>
-                        <MaterialIcons name="pending-actions" size={32} color="#fff" />
-                        <Text style={styles.statNumber}>{userStats.pendingApprovals}</Text>
-                        <Text style={styles.statLabel}>Pending Approvals</Text>
-                    </LinearGradient>
-                </Card>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => { setSelectedTab('approvals'); }}
+                >
+                    <Card style={styles.statCard}>
+                        <LinearGradient colors={['#ef4444', '#dc2626']} style={styles.statGradient}>
+                            <MaterialIcons name="pending-actions" size={32} color="#fff" />
+                            <Text style={styles.statNumber}>{userStats.pendingApprovals}</Text>
+                            <Text style={styles.statLabel}>Pending Approvals</Text>
+                        </LinearGradient>
+                    </Card>
+                </TouchableOpacity>
 
-                <Card style={styles.statCard}>
-                    <LinearGradient colors={['#06b6d4', '#0891b2']} style={styles.statGradient}>
-                        <MaterialIcons name="admin-panel-settings" size={32} color="#fff" />
-                        <Text style={styles.statNumber}>{userStats.admins}</Text>
-                        <Text style={styles.statLabel}>Administrators</Text>
-                    </LinearGradient>
-                </Card>
+                <TouchableOpacity
+                    activeOpacity={0.8}
+                    onPress={() => { setSelectedTab('users'); setRoleFilter('admin'); }}
+                >
+                    <Card style={styles.statCard}>
+                        <LinearGradient colors={['#06b6d4', '#0891b2']} style={styles.statGradient}>
+                            <MaterialIcons name="admin-panel-settings" size={32} color="#fff" />
+                            <Text style={styles.statNumber}>{userStats.admins}</Text>
+                            <Text style={styles.statLabel}>Administrators</Text>
+                        </LinearGradient>
+                    </Card>
+                </TouchableOpacity>
             </View>
         </View>
     );
@@ -427,72 +488,94 @@ const UserManagement = ({ navigation }: any) => {
 
             {/* Users List */}
             {filteredUsers.map((user) => (
-                <Card key={user.id} style={styles.userCard}>
-                    <View style={styles.userHeader}>
-                        <View style={styles.userInfo}>
-                            <Text style={styles.userName}>{user.fullName}</Text>
-                            <Text style={styles.userRole}>
-                                {user.role === 'transport_contractor' ? 'Transport Contractor' :
-                                    user.role === 'swachh_hr' ? 'Swachh HR' :
-                                        user.role === 'admin' ? 'Administrator' : user.role}
-                            </Text>
-                        </View>
-                        <View style={[
-                            styles.userStatusBadge,
-                            user.isActive ? styles.activeBadge : styles.inactiveBadge
-                        ]}>
-                            <Text style={[
-                                styles.userStatusText,
-                                user.isActive ? styles.activeText : styles.inactiveText
+                <TouchableOpacity
+                    key={user.id}
+                    onPress={() => openUserDetailModal(user)}
+                    activeOpacity={0.7}
+                >
+                    <Card style={styles.userCard}>
+                        <View style={styles.userHeader}>
+                            <View style={styles.userInfo}>
+                                <Text style={styles.userName}>{user.fullName}</Text>
+                                <Text style={styles.userRole}>
+                                    {user.role === 'transport_contractor' ? 'Transport Contractor' :
+                                        user.role === 'swachh_hr' ? 'Swachh HR' :
+                                            user.role === 'admin' ? 'Administrator' : user.role}
+                                </Text>
+                            </View>
+                            <View style={[
+                                styles.userStatusBadge,
+                                user.isActive ? styles.activeBadge : styles.inactiveBadge
                             ]}>
-                                {user.isActive ? 'ACTIVE' : 'INACTIVE'}
-                            </Text>
+                                <Text style={[
+                                    styles.userStatusText,
+                                    user.isActive ? styles.activeText : styles.inactiveText
+                                ]}>
+                                    {user.isActive ? 'ACTIVE' : 'INACTIVE'}
+                                </Text>
+                            </View>
                         </View>
-                    </View>
 
-                    <View style={styles.userDetails}>
-                        <View style={styles.userDetailRow}>
-                            <MaterialIcons name="email" size={16} color="#6b7280" />
-                            <Text style={styles.userDetailText}>{user.email}</Text>
+                        <View style={styles.userDetails}>
+                            <View style={styles.userDetailRow}>
+                                <MaterialIcons name="email" size={16} color="#6b7280" />
+                                <Text style={styles.userDetailText}>{user.email}</Text>
+                            </View>
+                            <View style={styles.userDetailRow}>
+                                <MaterialIcons name="phone" size={16} color="#6b7280" />
+                                <Text style={styles.userDetailText}>{user.phone}</Text>
+                            </View>
+                            <View style={styles.userDetailRow}>
+                                <MaterialIcons name="schedule" size={16} color="#6b7280" />
+                                <Text style={styles.userDetailText}>
+                                    Joined {new Date(user.createdAt).toLocaleDateString()}
+                                </Text>
+                            </View>
                         </View>
-                        <View style={styles.userDetailRow}>
-                            <MaterialIcons name="phone" size={16} color="#6b7280" />
-                            <Text style={styles.userDetailText}>{user.phone}</Text>
-                        </View>
-                        <View style={styles.userDetailRow}>
-                            <MaterialIcons name="schedule" size={16} color="#6b7280" />
-                            <Text style={styles.userDetailText}>
-                                Joined {new Date(user.createdAt).toLocaleDateString()}
-                            </Text>
-                        </View>
-                    </View>
 
-                    <View style={styles.userActions}>
-                        <TouchableOpacity
-                            style={styles.roleButton}
-                            onPress={() => openRoleModal(user)}
-                        >
-                            <MaterialIcons name="edit" size={20} color="#3b82f6" />
-                            <Text style={styles.roleButtonText}>Change Role</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[
-                                styles.statusButton,
-                                user.isActive ? styles.deactivateButton : styles.activateButton
-                            ]}
-                            onPress={() => toggleUserStatus(user)}
-                        >
-                            <MaterialIcons
-                                name={user.isActive ? 'block' : 'check-circle'}
-                                size={20}
-                                color="#fff"
-                            />
-                            <Text style={styles.statusButtonText}>
-                                {user.isActive ? 'Deactivate' : 'Activate'}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-                </Card>
+                        <View style={styles.userActions}>
+                            <TouchableOpacity
+                                style={styles.roleButton}
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    openRoleModal(user);
+                                }}
+                            >
+                                <MaterialIcons name="edit" size={20} color="#3b82f6" />
+                                <Text style={styles.roleButtonText}>Change Role</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.statusButton,
+                                    user.isActive ? styles.deactivateButton : styles.activateButton
+                                ]}
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    toggleUserStatus(user);
+                                }}
+                            >
+                                <MaterialIcons
+                                    name={user.isActive ? 'block' : 'check-circle'}
+                                    size={20}
+                                    color="#fff"
+                                />
+                                <Text style={styles.statusButtonText}>
+                                    {user.isActive ? 'Deactivate' : 'Activate'}
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.deleteButton}
+                                onPress={(e) => {
+                                    e.stopPropagation();
+                                    deleteUser(user);
+                                }}
+                            >
+                                <MaterialIcons name="delete" size={20} color="#ef4444" />
+                                <Text style={styles.deleteButtonText}>Delete</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </Card>
+                </TouchableOpacity>
             ))}
         </View>
     );
@@ -603,6 +686,116 @@ const UserManagement = ({ navigation }: any) => {
                                     <Text style={styles.confirmButtonText}>Update Role</Text>
                                 </TouchableOpacity>
                             </View>
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* User Detail Modal */}
+                <Modal
+                    visible={showUserDetailModal}
+                    transparent={true}
+                    animationType="slide"
+                    onRequestClose={() => setShowUserDetailModal(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.userDetailModalContent}>
+                            <View style={styles.userDetailHeader}>
+                                <Text style={styles.modalTitle}>User Details</Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowUserDetailModal(false)}
+                                    style={styles.closeButton}
+                                >
+                                    <MaterialIcons name="close" size={24} color="#6b7280" />
+                                </TouchableOpacity>
+                            </View>
+
+                            {selectedUserDetail && (
+                                <ScrollView style={styles.userDetailContent}>
+                                    <View style={styles.userDetailSection}>
+                                        <Text style={styles.userDetailSectionTitle}>Personal Information</Text>
+                                        <View style={styles.userDetailItem}>
+                                            <Text style={styles.userDetailLabel}>Full Name</Text>
+                                            <Text style={styles.userDetailValue}>{selectedUserDetail.fullName}</Text>
+                                        </View>
+                                        <View style={styles.userDetailItem}>
+                                            <Text style={styles.userDetailLabel}>Email</Text>
+                                            <Text style={styles.userDetailValue}>{selectedUserDetail.email}</Text>
+                                        </View>
+                                        <View style={styles.userDetailItem}>
+                                            <Text style={styles.userDetailLabel}>Phone</Text>
+                                            <Text style={styles.userDetailValue}>{selectedUserDetail.phone}</Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.userDetailSection}>
+                                        <Text style={styles.userDetailSectionTitle}>Account Information</Text>
+                                        <View style={styles.userDetailItem}>
+                                            <Text style={styles.userDetailLabel}>Role</Text>
+                                            <Text style={styles.userDetailValue}>
+                                                {selectedUserDetail.role === 'transport_contractor' ? 'Transport Contractor' :
+                                                    selectedUserDetail.role === 'swachh_hr' ? 'Swachh HR' :
+                                                        selectedUserDetail.role === 'admin' ? 'Administrator' : selectedUserDetail.role}
+                                            </Text>
+                                        </View>
+                                        <View style={styles.userDetailItem}>
+                                            <Text style={styles.userDetailLabel}>Status</Text>
+                                            <View style={[
+                                                styles.userStatusBadge,
+                                                selectedUserDetail.isActive ? styles.activeBadge : styles.inactiveBadge
+                                            ]}>
+                                                <Text style={[
+                                                    styles.userStatusText,
+                                                    selectedUserDetail.isActive ? styles.activeText : styles.inactiveText
+                                                ]}>
+                                                    {selectedUserDetail.isActive ? 'ACTIVE' : 'INACTIVE'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        <View style={styles.userDetailItem}>
+                                            <Text style={styles.userDetailLabel}>Joined Date</Text>
+                                            <Text style={styles.userDetailValue}>
+                                                {new Date(selectedUserDetail.createdAt).toLocaleDateString('en-US', {
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric'
+                                                })}
+                                            </Text>
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.userDetailActions}>
+                                        <TouchableOpacity
+                                            style={styles.roleButton}
+                                            onPress={() => {
+                                                setShowUserDetailModal(false);
+                                                openRoleModal(selectedUserDetail);
+                                            }}
+                                        >
+                                            <MaterialIcons name="edit" size={20} color="#3b82f6" />
+                                            <Text style={styles.roleButtonText}>Change Role</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.statusButton,
+                                                selectedUserDetail.isActive ? styles.deactivateButton : styles.activateButton
+                                            ]}
+                                            onPress={() => {
+                                                setShowUserDetailModal(false);
+                                                toggleUserStatus(selectedUserDetail);
+                                            }}
+                                        >
+                                            <MaterialIcons
+                                                name={selectedUserDetail.isActive ? 'block' : 'check-circle'}
+                                                size={20}
+                                                color="#fff"
+                                            />
+                                            <Text style={styles.statusButtonText}>
+                                                {selectedUserDetail.isActive ? 'Deactivate' : 'Activate'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </ScrollView>
+                            )}
                         </View>
                     </View>
                 </Modal>
@@ -820,6 +1013,7 @@ const styles = StyleSheet.create({
     },
     userInfo: {
         flex: 1,
+        minWidth: 0,
     },
     userName: {
         fontSize: 16,
@@ -867,6 +1061,8 @@ const styles = StyleSheet.create({
     },
     userActions: {
         flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 8,
         justifyContent: 'space-between',
         paddingHorizontal: 16,
         paddingBottom: 16,
@@ -882,6 +1078,8 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         borderWidth: 1,
         borderColor: '#3b82f6',
+        flexBasis: '48%',
+        marginTop: 8,
     },
     roleButtonText: {
         fontSize: 14,
@@ -890,12 +1088,13 @@ const styles = StyleSheet.create({
         marginLeft: 4,
     },
     statusButton: {
-        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 12,
         borderRadius: 8,
+        flexBasis: '48%',
+        marginTop: 8,
     },
     activateButton: {
         backgroundColor: '#10b981',
@@ -1038,6 +1237,76 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#ffffff',
         fontWeight: '500',
+    },
+    // Delete button styles
+    deleteButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        backgroundColor: '#fef2f2',
+        flexBasis: '48%',
+        marginTop: 8,
+    },
+    deleteButtonText: {
+        fontSize: 14,
+        color: '#ef4444',
+        fontWeight: '500',
+        marginLeft: 4,
+    },
+    // User detail modal styles
+    userDetailModalContent: {
+        backgroundColor: '#ffffff',
+        borderRadius: 12,
+        margin: 20,
+        maxHeight: height * 0.8,
+        width: width * 0.9,
+    },
+    userDetailHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 20,
+        borderBottomWidth: 1,
+        borderBottomColor: '#e5e7eb',
+    },
+    closeButton: {
+        padding: 4,
+    },
+    userDetailContent: {
+        padding: 20,
+    },
+    userDetailSection: {
+        marginBottom: 24,
+    },
+    userDetailSectionTitle: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#111827',
+        marginBottom: 12,
+    },
+    userDetailItem: {
+        marginBottom: 16,
+    },
+    userDetailLabel: {
+        fontSize: 14,
+        color: '#6b7280',
+        marginBottom: 4,
+        fontWeight: '500',
+    },
+    userDetailValue: {
+        fontSize: 16,
+        color: '#111827',
+        fontWeight: '400',
+    },
+    userDetailActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        paddingTop: 20,
+        borderTopWidth: 1,
+        borderTopColor: '#e5e7eb',
     },
 });
 

@@ -18,6 +18,7 @@ import { Camera } from "expo-camera"
 import * as Location from "expo-location"
 import { WorkerAttendanceService, WorkerAttendanceData, AssignedWorker } from "../../../services/WorkerAttendanceService"
 import { useRequireAuth } from "../../hooks/useRequireAuth"
+import { useProfessionalAlert } from "../../components/ProfessionalAlert"
 
 const { width, height } = Dimensions.get("window")
 
@@ -33,6 +34,11 @@ interface AttendancePhoto {
 const WorkerAttendance = ({ navigation, route }: any) => {
   const { userData } = useRequireAuth(navigation)
   const { driverId, vehicleId } = route.params || {}
+  const { showAlert, AlertComponent } = useProfessionalAlert()
+
+  // Validate required parameters
+  const actualDriverId = driverId || userData?.uid
+  const actualVehicleId = vehicleId || userData?.assignedVehicleId || 'default-vehicle'
 
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -51,13 +57,29 @@ const WorkerAttendance = ({ navigation, route }: any) => {
   // Location state
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number, longitude: number } | null>(null)
 
+  // Photo capture settings
+  const [isPhotoRequired, setIsPhotoRequired] = useState(true)
+  const [showAttendanceOptions, setShowAttendanceOptions] = useState(false)
+
   useEffect(() => {
-    if (driverId) {
+    if (actualDriverId) {
       fetchAttendanceData()
       requestPermissions()
       getCurrentLocation()
+    } else {
+      showAlert({
+        title: 'Missing Driver Information',
+        message: 'Driver ID is required to mark attendance. Please contact support.',
+        type: 'error',
+        buttons: [
+          {
+            text: 'Go Back',
+            onPress: () => navigation.goBack(),
+          },
+        ],
+      })
     }
-  }, [driverId])
+  }, [actualDriverId])
 
   useEffect(() => {
     filterWorkers()
@@ -72,10 +94,21 @@ const WorkerAttendance = ({ navigation, route }: any) => {
       // Request location permission
       const locationStatus = await Location.requestForegroundPermissionsAsync()
       if (locationStatus.status !== 'granted') {
-        Alert.alert('Permission Denied', 'Location permission is required for attendance verification.')
+        showAlert({
+          title: 'Permission Required',
+          message: 'Location permission is required for attendance verification.',
+          type: 'warning',
+          buttons: [{ text: 'OK' }],
+        })
       }
     } catch (error) {
       console.error("❌ [WorkerAttendance] Error requesting permissions:", error)
+      showAlert({
+        title: 'Permission Error',
+        message: 'Failed to request permissions. Please check your device settings.',
+        type: 'error',
+        buttons: [{ text: 'OK' }],
+      })
     }
   }
 
@@ -130,20 +163,26 @@ const WorkerAttendance = ({ navigation, route }: any) => {
   }
 
   const handleMarkAttendance = (worker: AssignedWorker) => {
-    if (!cameraPermission) {
-      Alert.alert(
-        "Camera Permission Required",
-        "Please grant camera permission to capture attendance photos.",
-        [
-          { text: "Cancel" },
-          { text: "Open Settings", onPress: () => requestPermissions() }
-        ]
-      )
-      return
-    }
-
     setSelectedWorker(worker)
-    setShowCamera(true)
+
+    if (isPhotoRequired) {
+      // Photo is required - check camera permission and show camera
+      if (!cameraPermission) {
+        Alert.alert(
+          "Camera Permission Required",
+          "Please grant camera permission to capture attendance photos.",
+          [
+            { text: "Cancel" },
+            { text: "Open Settings", onPress: () => requestPermissions() }
+          ]
+        )
+        return
+      }
+      setShowCamera(true)
+    } else {
+      // Photo is optional - show attendance options directly
+      setShowAttendanceOptions(true)
+    }
   }
 
   const takePicture = async () => {
@@ -176,12 +215,12 @@ const WorkerAttendance = ({ navigation, route }: any) => {
     }
   }
 
-  const showAttendanceConfirmation = (photo: AttendancePhoto) => {
+  const showAttendanceConfirmation = (photo?: AttendancePhoto) => {
     if (!selectedWorker) return
 
     Alert.alert(
       "Confirm Attendance",
-      `Mark ${selectedWorker.workerName} as present?`,
+      `Mark ${selectedWorker.workerName} as present?${photo ? ' (with photo)' : ' (without photo)'}`,
       [
         {
           text: "Cancel",
@@ -189,6 +228,7 @@ const WorkerAttendance = ({ navigation, route }: any) => {
           onPress: () => {
             setCapturedPhoto(null)
             setSelectedWorker(null)
+            setShowAttendanceOptions(false)
           }
         },
         {
@@ -204,22 +244,64 @@ const WorkerAttendance = ({ navigation, route }: any) => {
     )
   }
 
+  const handleAttendanceWithoutPhoto = () => {
+    if (!selectedWorker) return
+
+    // Create attendance record with location but no photo
+    const attendanceData = {
+      timestamp: new Date(),
+      location: currentLocation || undefined
+    }
+
+    setShowAttendanceOptions(false)
+    showAttendanceConfirmation()
+  }
+
+  const handleAttendanceWithPhoto = () => {
+    if (!cameraPermission) {
+      Alert.alert(
+        "Camera Permission Required",
+        "Please grant camera permission to capture attendance photos.",
+        [
+          { text: "Cancel" },
+          { text: "Open Settings", onPress: () => requestPermissions() }
+        ]
+      )
+      return
+    }
+
+    setShowAttendanceOptions(false)
+    setShowCamera(true)
+  }
+
   const submitAttendance = async (isPresent: boolean, photo?: AttendancePhoto) => {
     if (!selectedWorker) return
 
     try {
-      console.log("💾 [WorkerAttendance] Submitting attendance for:", selectedWorker.workerName, "Present:", isPresent)
+      console.log("💾 [WorkerAttendance] Submitting attendance for:", selectedWorker.workerName, "Present:", isPresent, "With photo:", !!photo)
+
+      // Use photo location if available, otherwise use current location
+      const attendanceLocation = photo?.location || currentLocation
+
+      // Validate required data before submission
+      if (!selectedWorker.workerId || !selectedWorker.workerName) {
+        throw new Error('Invalid worker data')
+      }
+
+      if (!actualDriverId) {
+        throw new Error('Driver ID is required')
+      }
 
       await WorkerAttendanceService.markWorkerAttendance({
         workerId: selectedWorker.workerId,
         workerName: selectedWorker.workerName,
-        driverId: driverId,
-        vehicleId: vehicleId,
+        driverId: actualDriverId,
+        vehicleId: actualVehicleId,
         isPresent,
         checkInTime: new Date(),
         photoUri: photo?.uri,
-        location: photo?.location,
-        notes: ""
+        location: attendanceLocation,
+        notes: photo ? "Attendance marked with photo" : "Attendance marked without photo"
       })
 
       // Update local state
@@ -230,19 +312,26 @@ const WorkerAttendance = ({ navigation, route }: any) => {
       )
       setAssignedWorkers(updatedWorkers)
 
-      Alert.alert(
-        "Success",
-        `${selectedWorker.workerName} marked as ${isPresent ? 'present' : 'absent'}.`,
-        [{ text: "OK" }]
-      )
+      showAlert({
+        title: 'Attendance Marked',
+        message: `${selectedWorker.workerName} marked as ${isPresent ? 'present' : 'absent'}${photo ? ' with photo' : ' without photo'}.`,
+        type: 'success',
+        buttons: [{ text: 'OK' }],
+      })
 
       // Reset states
       setCapturedPhoto(null)
       setSelectedWorker(null)
+      setShowAttendanceOptions(false)
 
     } catch (error) {
       console.error("❌ [WorkerAttendance] Error submitting attendance:", error)
-      Alert.alert("Error", "Failed to mark attendance. Please try again.")
+      showAlert({
+        title: 'Attendance Error',
+        message: `Failed to mark attendance: ${error.message || 'Unknown error'}. Please try again.`,
+        type: 'error',
+        buttons: [{ text: 'OK' }],
+      })
     }
   }
 
@@ -312,6 +401,30 @@ const WorkerAttendance = ({ navigation, route }: any) => {
               <Text style={styles.statNumber}>{stats.pending}</Text>
               <Text style={styles.statLabel}>Pending</Text>
             </View>
+          </View>
+        </Card>
+
+        {/* Photo Settings */}
+        <Card style={styles.settingsCard}>
+          <Text style={styles.cardTitle}>Attendance Settings</Text>
+          <View style={styles.settingRow}>
+            <View style={styles.settingInfo}>
+              <MaterialIcons name="photo-camera" size={24} color="#6b7280" />
+              <View style={styles.settingText}>
+                <Text style={styles.settingLabel}>Photo Capture</Text>
+                <Text style={styles.settingDescription}>
+                  {isPhotoRequired ? 'Photos required for attendance' : 'Photos optional for attendance'}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.toggleButton, isPhotoRequired && styles.toggleButtonActive]}
+              onPress={() => setIsPhotoRequired(!isPhotoRequired)}
+            >
+              <Text style={[styles.toggleText, isPhotoRequired && styles.toggleTextActive]}>
+                {isPhotoRequired ? 'Required' : 'Optional'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </Card>
 
@@ -423,6 +536,50 @@ const WorkerAttendance = ({ navigation, route }: any) => {
         </View>
       </Modal>
 
+      {/* Attendance Options Modal */}
+      <Modal visible={showAttendanceOptions} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.attendanceOptionsModal}>
+            <Text style={styles.modalTitle}>
+              Mark Attendance for {selectedWorker?.workerName}
+            </Text>
+            <Text style={styles.modalSubtitle}>
+              Choose how you want to mark attendance
+            </Text>
+
+            <View style={styles.optionsContainer}>
+              <TouchableOpacity
+                style={styles.optionButton}
+                onPress={handleAttendanceWithPhoto}
+              >
+                <MaterialIcons name="photo-camera" size={32} color="#2563eb" />
+                <Text style={styles.optionTitle}>With Photo</Text>
+                <Text style={styles.optionDescription}>Take a photo for verification</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.optionButton}
+                onPress={handleAttendanceWithoutPhoto}
+              >
+                <MaterialIcons name="location-on" size={32} color="#059669" />
+                <Text style={styles.optionTitle}>Without Photo</Text>
+                <Text style={styles.optionDescription}>Use location only</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => {
+                setShowAttendanceOptions(false)
+                setSelectedWorker(null)
+              }}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Floating Action Button */}
       <FAB
         style={styles.fab}
@@ -437,6 +594,9 @@ const WorkerAttendance = ({ navigation, route }: any) => {
           handleMarkAttendance(pendingWorkers[0])
         }}
       />
+
+      {/* Professional Alert Component */}
+      <AlertComponent />
     </SafeAreaView>
   )
 }
@@ -645,6 +805,127 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: "#3b82f6",
+  },
+  // Settings styles
+  settingsCard: {
+    margin: 16,
+    marginTop: 8,
+    padding: 16,
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  settingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+  },
+  settingInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  settingText: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  settingDescription: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginTop: 2,
+  },
+  toggleButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+  },
+  toggleButtonActive: {
+    backgroundColor: "#dbeafe",
+    borderColor: "#3b82f6",
+  },
+  toggleText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#6b7280",
+  },
+  toggleTextActive: {
+    color: "#3b82f6",
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  attendanceOptionsModal: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 24,
+    margin: 20,
+    width: width - 40,
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#6b7280",
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  optionsContainer: {
+    gap: 16,
+    marginBottom: 24,
+  },
+  optionButton: {
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: "#e5e7eb",
+    alignItems: "center",
+    backgroundColor: "#f9fafb",
+  },
+  optionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+    marginTop: 8,
+  },
+  optionDescription: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginTop: 4,
+    textAlign: "center",
+  },
+  cancelButton: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#6b7280",
   },
 })
 

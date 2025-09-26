@@ -11,7 +11,8 @@ import {
   onSnapshot,
   Timestamp,
   serverTimestamp,
-  updateDoc
+  updateDoc,
+  writeBatch
 } from "firebase/firestore"
 import { FIRESTORE_DB } from "../FirebaseConfig"
 
@@ -49,20 +50,21 @@ export interface AttendanceRecord {
   workerId: string
   workerName: string
   driverId: string
+  driverName: string
   vehicleId?: string
   contractorId?: string
-  date: Date
-  isPresent: boolean
-  checkInTime?: Date
-  checkOutTime?: Date
+  feederPointId: string
+  feederPointName: string
+  status: 'present' | 'absent'
+  timestamp: Date
   photoUri?: string
   location?: {
     latitude: number
     longitude: number
   }
   notes?: string
-  createdAt: Date
-  updatedAt: Date
+  createdAt?: Date
+  updatedAt?: Date
 }
 
 export interface MarkAttendanceParams {
@@ -109,6 +111,7 @@ export class WorkerAttendanceService {
 
         return {
           ...worker,
+          
           isPresent: attendanceRecord?.isPresent,
           checkInTime: attendanceRecord?.checkInTime,
           photoUri: attendanceRecord?.photoUri,
@@ -268,24 +271,51 @@ export class WorkerAttendanceService {
   // Mark worker attendance
   static async markWorkerAttendance(params: MarkAttendanceParams): Promise<void> {
     try {
-      console.log("💾 [WorkerAttendanceService] Marking attendance for worker:", params.workerName)
+      console.log("💾 [WorkerAttendanceService] Marking attendance for worker:", params.workerName, "with photo:", !!params.photoUri)
+
+      // Validate attendance data - ensure we have either photo or location for verification
+      if (!params.photoUri && !params.location) {
+        console.warn("⚠️ [WorkerAttendanceService] Attendance marked without photo or location verification")
+      }
+
+      // Validate and sanitize input parameters
+      const sanitizedParams = {
+        workerId: params.workerId || "",
+        workerName: params.workerName || "",
+        driverId: params.driverId || "",
+        vehicleId: params.vehicleId || null,
+        isPresent: params.isPresent,
+        checkInTime: params.checkInTime || new Date(),
+        photoUri: params.photoUri || null, // Use null instead of undefined
+        location: params.location || null, // Use null instead of undefined
+        notes: params.notes || "" // Default to empty string
+      }
+
+      console.log("📋 [WorkerAttendanceService] Sanitized params:", {
+        workerId: sanitizedParams.workerId,
+        workerName: sanitizedParams.workerName,
+        isPresent: sanitizedParams.isPresent,
+        hasPhoto: !!sanitizedParams.photoUri,
+        hasLocation: !!sanitizedParams.location,
+        hasNotes: !!sanitizedParams.notes
+      })
 
       // Get driver's contractor ID
-      const driverDoc = await getDoc(doc(FIRESTORE_DB, "users", params.driverId))
+      const driverDoc = await getDoc(doc(FIRESTORE_DB, "users", sanitizedParams.driverId))
       const driverData = driverDoc.data()
 
       const attendanceRecord: Omit<AttendanceRecord, "id"> = {
-        workerId: params.workerId,
-        workerName: params.workerName,
-        driverId: params.driverId,
-        vehicleId: params.vehicleId,
-        contractorId: driverData?.contractorId,
+        workerId: sanitizedParams.workerId,
+        workerName: sanitizedParams.workerName,
+        driverId: sanitizedParams.driverId,
+        vehicleId: sanitizedParams.vehicleId,
+        contractorId: driverData?.contractorId || null,
         date: Timestamp.fromDate(new Date()) as any,
-        isPresent: params.isPresent,
-        checkInTime: params.checkInTime ? Timestamp.fromDate(params.checkInTime) as any : undefined,
-        photoUri: params.photoUri,
-        location: params.location,
-        notes: params.notes || "",
+        isPresent: sanitizedParams.isPresent,
+        checkInTime: sanitizedParams.checkInTime ? Timestamp.fromDate(sanitizedParams.checkInTime) as any : null,
+        photoUri: sanitizedParams.photoUri,
+        location: sanitizedParams.location,
+        notes: sanitizedParams.notes,
         createdAt: serverTimestamp() as any,
         updatedAt: serverTimestamp() as any
       }
@@ -309,14 +339,14 @@ export class WorkerAttendanceService {
       const existingSnapshot = await getDocs(existingQuery)
 
       if (!existingSnapshot.empty) {
-        // Update existing record
+        // Update existing record with sanitized data
         const existingDoc = existingSnapshot.docs[0]
         await updateDoc(existingDoc.ref, {
-          isPresent: params.isPresent,
-          checkInTime: params.checkInTime ? Timestamp.fromDate(params.checkInTime) : undefined,
-          photoUri: params.photoUri,
-          location: params.location,
-          notes: params.notes || "",
+          isPresent: sanitizedParams.isPresent,
+          checkInTime: sanitizedParams.checkInTime ? Timestamp.fromDate(sanitizedParams.checkInTime) : null,
+          photoUri: sanitizedParams.photoUri,
+          location: sanitizedParams.location,
+          notes: sanitizedParams.notes,
           updatedAt: serverTimestamp()
         })
         console.log("✅ [WorkerAttendanceService] Updated existing attendance record")
@@ -329,6 +359,386 @@ export class WorkerAttendanceService {
     } catch (error) {
       console.error("❌ [WorkerAttendanceService] Error marking attendance:", error)
       throw new Error("Failed to mark worker attendance")
+    }
+  }
+
+  // Update attendance record
+  static async updateAttendanceRecord(recordId: string, updates: {
+    status?: 'present' | 'absent'
+    notes?: string
+    timestamp?: Date
+  }): Promise<void> {
+    try {
+      console.log("📝 [WorkerAttendanceService] Updating attendance record:", recordId)
+
+      // Sanitize update data to prevent undefined values
+      const updateData: any = {
+        updatedAt: serverTimestamp()
+      }
+
+      if (updates.status) updateData.status = updates.status
+      if (updates.notes !== undefined) updateData.notes = updates.notes || "" // Ensure notes is never undefined
+      if (updates.timestamp) updateData.timestamp = Timestamp.fromDate(updates.timestamp)
+
+      console.log("📋 [WorkerAttendanceService] Sanitized update data:", {
+        recordId,
+        hasStatus: !!updateData.status,
+        hasNotes: updateData.notes !== undefined,
+        hasTimestamp: !!updateData.timestamp
+      })
+
+      await updateDoc(doc(FIRESTORE_DB, "workerAttendance", recordId), updateData)
+      console.log("✅ [WorkerAttendanceService] Attendance record updated successfully")
+    } catch (error) {
+      console.error("❌ [WorkerAttendanceService] Error updating attendance record:", error)
+      throw new Error("Failed to update attendance record")
+    }
+  }
+
+  // Bulk update attendance status
+  static async bulkUpdateAttendanceStatus(recordIds: string[], status: 'present' | 'absent'): Promise<void> {
+    try {
+      console.log("📋 [WorkerAttendanceService] Bulk updating", recordIds.length, "records to", status)
+
+      const batch = writeBatch(FIRESTORE_DB)
+
+      recordIds.forEach(recordId => {
+        const recordRef = doc(FIRESTORE_DB, "workerAttendance", recordId)
+        batch.update(recordRef, {
+          status,
+          updatedAt: serverTimestamp()
+        })
+      })
+
+      await batch.commit()
+      console.log("✅ [WorkerAttendanceService] Bulk update completed successfully")
+    } catch (error) {
+      console.error("❌ [WorkerAttendanceService] Error in bulk update:", error)
+      throw new Error("Failed to bulk update attendance records")
+    }
+  }
+
+  // Get worker attendance profile with statistics
+  static async getWorkerAttendanceProfile(workerId: string, dateRange?: {
+    startDate: Date
+    endDate: Date
+  }): Promise<{
+    worker: any
+    attendanceHistory: AttendanceRecord[]
+    statistics: {
+      totalDays: number
+      presentDays: number
+      absentDays: number
+      attendanceRate: number
+      lateArrivals: number
+      earlyDepartures: number
+      averageCheckInTime: string
+    }
+    trends: {
+      weeklyAttendance: { week: string, rate: number }[]
+      monthlyAttendance: { month: string, rate: number }[]
+    }
+  }> {
+    try {
+      console.log("👤 [WorkerAttendanceService] Getting attendance profile for worker:", workerId)
+
+      // Set default date range to last 30 days if not provided
+      const endDate = dateRange?.endDate || new Date()
+      const startDate = dateRange?.startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+
+      // Get worker information
+      const workerDoc = await getDoc(doc(FIRESTORE_DB, "users", workerId))
+      const worker = workerDoc.exists() ? { id: workerId, ...workerDoc.data() } : null
+
+      // Get attendance records for the date range
+      const attendanceQuery = query(
+        collection(FIRESTORE_DB, "workerAttendance"),
+        where("workerId", "==", workerId),
+        where("date", ">=", Timestamp.fromDate(startDate)),
+        where("date", "<=", Timestamp.fromDate(endDate)),
+        orderBy("date", "desc")
+      )
+
+      const attendanceSnapshot = await getDocs(attendanceQuery)
+      const attendanceHistory: AttendanceRecord[] = []
+
+      attendanceSnapshot.forEach((doc) => {
+        const data = doc.data()
+        attendanceHistory.push({
+          id: doc.id,
+          workerId: data.workerId,
+          workerName: data.workerName,
+          feederPointId: data.feederPointId || "",
+          feederPointName: data.feederPointName || "",
+          driverId: data.driverId,
+          driverName: data.driverName || "",
+          tripId: data.tripId || "",
+          status: data.isPresent ? 'present' : 'absent',
+          timestamp: data.date?.toDate() || new Date(),
+          location: data.location || { latitude: 0, longitude: 0 },
+          photoUri: data.photoUri,
+          notes: data.notes
+        })
+      })
+
+      // Calculate statistics
+      const totalDays = attendanceHistory.length
+      const presentDays = attendanceHistory.filter(record => record.status === 'present').length
+      const absentDays = totalDays - presentDays
+      const attendanceRate = totalDays > 0 ? (presentDays / totalDays) * 100 : 0
+
+      // Calculate late arrivals and early departures (simplified logic)
+      const lateArrivals = attendanceHistory.filter(record => {
+        if (record.status === 'present' && record.timestamp) {
+          const hour = record.timestamp.getHours()
+          return hour > 9 // Assuming work starts at 9 AM
+        }
+        return false
+      }).length
+
+      const earlyDepartures = 0 // Would need check-out time data
+
+      // Calculate average check-in time
+      const checkInTimes = attendanceHistory
+        .filter(record => record.status === 'present')
+        .map(record => record.timestamp.getHours() * 60 + record.timestamp.getMinutes())
+
+      const averageMinutes = checkInTimes.length > 0
+        ? checkInTimes.reduce((sum, time) => sum + time, 0) / checkInTimes.length
+        : 0
+
+      const avgHours = Math.floor(averageMinutes / 60)
+      const avgMins = Math.floor(averageMinutes % 60)
+      const averageCheckInTime = `${avgHours.toString().padStart(2, '0')}:${avgMins.toString().padStart(2, '0')}`
+
+      // Calculate trends (simplified)
+      const weeklyAttendance: { week: string, rate: number }[] = []
+      const monthlyAttendance: { month: string, rate: number }[] = []
+
+      // Group by weeks and months for trends
+      const weekGroups = new Map<string, { present: number, total: number }>()
+      const monthGroups = new Map<string, { present: number, total: number }>()
+
+      attendanceHistory.forEach(record => {
+        const date = record.timestamp
+        const weekKey = `Week ${Math.ceil(date.getDate() / 7)}`
+        const monthKey = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+
+        // Week grouping
+        if (!weekGroups.has(weekKey)) {
+          weekGroups.set(weekKey, { present: 0, total: 0 })
+        }
+        const weekData = weekGroups.get(weekKey)!
+        weekData.total++
+        if (record.status === 'present') weekData.present++
+
+        // Month grouping
+        if (!monthGroups.has(monthKey)) {
+          monthGroups.set(monthKey, { present: 0, total: 0 })
+        }
+        const monthData = monthGroups.get(monthKey)!
+        monthData.total++
+        if (record.status === 'present') monthData.present++
+      })
+
+      weekGroups.forEach((data, week) => {
+        weeklyAttendance.push({
+          week,
+          rate: data.total > 0 ? (data.present / data.total) * 100 : 0
+        })
+      })
+
+      monthGroups.forEach((data, month) => {
+        monthlyAttendance.push({
+          month,
+          rate: data.total > 0 ? (data.present / data.total) * 100 : 0
+        })
+      })
+
+      return {
+        worker,
+        attendanceHistory,
+        statistics: {
+          totalDays,
+          presentDays,
+          absentDays,
+          attendanceRate,
+          lateArrivals,
+          earlyDepartures,
+          averageCheckInTime
+        },
+        trends: {
+          weeklyAttendance,
+          monthlyAttendance
+        }
+      }
+    } catch (error) {
+      console.error("❌ [WorkerAttendanceService] Error getting worker profile:", error)
+      throw new Error("Failed to get worker attendance profile")
+    }
+  }
+
+  // Get comprehensive attendance analytics
+  static async getAttendanceAnalytics(dateRange: {
+    startDate: Date
+    endDate: Date
+  }): Promise<{
+    overview: {
+      totalWorkers: number
+      totalRecords: number
+      averageAttendanceRate: number
+      topPerformers: { workerId: string, workerName: string, rate: number }[]
+      lowPerformers: { workerId: string, workerName: string, rate: number }[]
+    }
+    trends: {
+      dailyAttendance: { date: string, present: number, absent: number, rate: number }[]
+      weeklyTrends: { week: string, rate: number }[]
+      monthlyTrends: { month: string, rate: number }[]
+    }
+    insights: {
+      peakAttendanceDays: string[]
+      lowAttendanceDays: string[]
+      averageCheckInTime: string
+      lateArrivalRate: number
+    }
+  }> {
+    try {
+      console.log("📊 [WorkerAttendanceService] Generating attendance analytics")
+
+      // Get all attendance records for the date range
+      const attendanceQuery = query(
+        collection(FIRESTORE_DB, "workerAttendance"),
+        where("date", ">=", Timestamp.fromDate(dateRange.startDate)),
+        where("date", "<=", Timestamp.fromDate(dateRange.endDate)),
+        orderBy("date", "asc")
+      )
+
+      const attendanceSnapshot = await getDocs(attendanceQuery)
+      const records: any[] = []
+
+      attendanceSnapshot.forEach((doc) => {
+        const data = doc.data()
+        records.push({
+          id: doc.id,
+          workerId: data.workerId,
+          workerName: data.workerName,
+          isPresent: data.isPresent,
+          date: data.date?.toDate(),
+          checkInTime: data.checkInTime?.toDate()
+        })
+      })
+
+      // Calculate overview statistics
+      const uniqueWorkers = new Set(records.map(r => r.workerId))
+      const totalWorkers = uniqueWorkers.size
+      const totalRecords = records.length
+      const presentRecords = records.filter(r => r.isPresent).length
+      const averageAttendanceRate = totalRecords > 0 ? (presentRecords / totalRecords) * 100 : 0
+
+      // Calculate worker performance
+      const workerStats = new Map<string, { name: string, present: number, total: number }>()
+
+      records.forEach(record => {
+        if (!workerStats.has(record.workerId)) {
+          workerStats.set(record.workerId, {
+            name: record.workerName,
+            present: 0,
+            total: 0
+          })
+        }
+        const stats = workerStats.get(record.workerId)!
+        stats.total++
+        if (record.isPresent) stats.present++
+      })
+
+      const workerPerformance = Array.from(workerStats.entries()).map(([workerId, stats]) => ({
+        workerId,
+        workerName: stats.name,
+        rate: stats.total > 0 ? (stats.present / stats.total) * 100 : 0
+      }))
+
+      const topPerformers = workerPerformance
+        .sort((a, b) => b.rate - a.rate)
+        .slice(0, 5)
+
+      const lowPerformers = workerPerformance
+        .sort((a, b) => a.rate - b.rate)
+        .slice(0, 5)
+
+      // Calculate daily trends
+      const dailyStats = new Map<string, { present: number, absent: number }>()
+
+      records.forEach(record => {
+        const dateKey = record.date.toDateString()
+        if (!dailyStats.has(dateKey)) {
+          dailyStats.set(dateKey, { present: 0, absent: 0 })
+        }
+        const dayStats = dailyStats.get(dateKey)!
+        if (record.isPresent) {
+          dayStats.present++
+        } else {
+          dayStats.absent++
+        }
+      })
+
+      const dailyAttendance = Array.from(dailyStats.entries()).map(([date, stats]) => ({
+        date,
+        present: stats.present,
+        absent: stats.absent,
+        rate: (stats.present + stats.absent) > 0 ? (stats.present / (stats.present + stats.absent)) * 100 : 0
+      }))
+
+      // Calculate insights
+      const sortedDays = dailyAttendance.sort((a, b) => b.rate - a.rate)
+      const peakAttendanceDays = sortedDays.slice(0, 3).map(d => d.date)
+      const lowAttendanceDays = sortedDays.slice(-3).map(d => d.date)
+
+      // Calculate average check-in time
+      const checkInTimes = records
+        .filter(r => r.isPresent && r.checkInTime)
+        .map(r => r.checkInTime.getHours() * 60 + r.checkInTime.getMinutes())
+
+      const avgMinutes = checkInTimes.length > 0
+        ? checkInTimes.reduce((sum, time) => sum + time, 0) / checkInTimes.length
+        : 0
+
+      const avgHours = Math.floor(avgMinutes / 60)
+      const avgMins = Math.floor(avgMinutes % 60)
+      const averageCheckInTime = `${avgHours.toString().padStart(2, '0')}:${avgMins.toString().padStart(2, '0')}`
+
+      // Calculate late arrival rate (assuming work starts at 9 AM)
+      const lateArrivals = records.filter(r => {
+        if (r.isPresent && r.checkInTime) {
+          return r.checkInTime.getHours() > 9
+        }
+        return false
+      }).length
+
+      const lateArrivalRate = presentRecords > 0 ? (lateArrivals / presentRecords) * 100 : 0
+
+      return {
+        overview: {
+          totalWorkers,
+          totalRecords,
+          averageAttendanceRate,
+          topPerformers,
+          lowPerformers
+        },
+        trends: {
+          dailyAttendance,
+          weeklyTrends: [], // Simplified for now
+          monthlyTrends: []  // Simplified for now
+        },
+        insights: {
+          peakAttendanceDays,
+          lowAttendanceDays,
+          averageCheckInTime,
+          lateArrivalRate
+        }
+      }
+    } catch (error) {
+      console.error("❌ [WorkerAttendanceService] Error generating analytics:", error)
+      throw new Error("Failed to generate attendance analytics")
     }
   }
 
@@ -482,20 +892,21 @@ export class WorkerAttendanceService {
   static async bulkMarkAttendance(
     driverId: string,
     vehicleId: string,
-    attendanceList: { workerId: string; workerName: string; isPresent: boolean; photoUri?: string }[]
+    attendanceList: { workerId: string; workerName: string; isPresent: boolean; photoUri?: string; notes?: string }[]
   ): Promise<void> {
     try {
       console.log("📋 [WorkerAttendanceService] Bulk marking attendance for", attendanceList.length, "workers")
 
       const promises = attendanceList.map(attendance =>
         this.markWorkerAttendance({
-          workerId: attendance.workerId,
-          workerName: attendance.workerName,
-          driverId,
-          vehicleId,
+          workerId: attendance.workerId || "",
+          workerName: attendance.workerName || "",
+          driverId: driverId || "",
+          vehicleId: vehicleId || "",
           isPresent: attendance.isPresent,
           checkInTime: new Date(),
-          photoUri: attendance.photoUri
+          photoUri: attendance.photoUri || null,
+          notes: attendance.notes || ""
         })
       )
 
@@ -505,6 +916,153 @@ export class WorkerAttendanceService {
     } catch (error) {
       console.error("❌ [WorkerAttendanceService] Error in bulk attendance marking:", error)
       throw new Error("Failed to mark bulk attendance")
+    }
+  }
+
+  // Enhanced attendance data access for HR and Admin roles
+  static async getAttendanceForHRAndAdmin(
+    userRole: string,
+    startDate?: Date,
+    endDate?: Date,
+    employeeFilter?: string
+  ): Promise<AttendanceRecord[]> {
+    try {
+      console.log("🔄 [WorkerAttendanceService] Fetching attendance for HR/Admin:", { userRole, startDate, endDate, employeeFilter })
+
+      // Validate permissions
+      if (userRole !== 'admin' && userRole !== 'swachh_hr') {
+        throw new Error("Insufficient permissions to access attendance data")
+      }
+
+      let attendanceQuery = collection(FIRESTORE_DB, "workerAttendance")
+      const constraints: any[] = []
+
+      // Add date range constraints
+      if (startDate) {
+        const startTimestamp = Timestamp.fromDate(startDate)
+        constraints.push(where("timestamp", ">=", startTimestamp))
+      }
+
+      if (endDate) {
+        const endTimestamp = Timestamp.fromDate(endDate)
+        constraints.push(where("timestamp", "<=", endTimestamp))
+      }
+
+      // Add employee filter if provided
+      if (employeeFilter) {
+        constraints.push(where("workerName", ">=", employeeFilter))
+        constraints.push(where("workerName", "<=", employeeFilter + '\uf8ff'))
+      }
+
+      // Add ordering
+      constraints.push(orderBy("timestamp", "desc"))
+
+      const q = query(attendanceQuery, ...constraints)
+      const querySnapshot = await getDocs(q)
+
+      const records: AttendanceRecord[] = []
+      querySnapshot.forEach((doc) => {
+        const data = doc.data()
+        records.push({
+          id: doc.id,
+          workerId: data.workerId,
+          workerName: data.workerName,
+          driverId: data.driverId,
+          driverName: data.driverName,
+          feederPointId: data.feederPointId,
+          feederPointName: data.feederPointName,
+          status: data.status,
+          timestamp: data.timestamp?.toDate() || new Date(),
+          photoUri: data.photoUri,
+          location: data.location,
+          notes: data.notes
+        })
+      })
+
+      console.log(`✅ [WorkerAttendanceService] Retrieved ${records.length} attendance records for ${userRole}`)
+      return records
+
+    } catch (error) {
+      console.error("❌ [WorkerAttendanceService] Error fetching HR/Admin attendance data:", error)
+      throw new Error(`Failed to fetch attendance data: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  // Get attendance statistics for HR and Admin
+  static async getAttendanceStatisticsForHRAndAdmin(
+    userRole: string,
+    startDate: Date,
+    endDate: Date
+  ): Promise<{
+    totalRecords: number
+    presentCount: number
+    absentCount: number
+    attendanceRate: number
+    dailyStats: { [date: string]: { present: number; absent: number; total: number } }
+    workerStats: { [workerId: string]: { name: string; present: number; absent: number; total: number } }
+  }> {
+    try {
+      console.log("📊 [WorkerAttendanceService] Generating statistics for HR/Admin")
+
+      // Validate permissions
+      if (userRole !== 'admin' && userRole !== 'swachh_hr') {
+        throw new Error("Insufficient permissions to access attendance statistics")
+      }
+
+      const records = await this.getAttendanceForHRAndAdmin(userRole, startDate, endDate)
+
+      const totalRecords = records.length
+      const presentCount = records.filter(r => r.status === 'present').length
+      const absentCount = records.filter(r => r.status === 'absent').length
+      const attendanceRate = totalRecords > 0 ? (presentCount / totalRecords) * 100 : 0
+
+      // Generate daily statistics
+      const dailyStats: { [date: string]: { present: number; absent: number; total: number } } = {}
+      const workerStats: { [workerId: string]: { name: string; present: number; absent: number; total: number } } = {}
+
+      records.forEach(record => {
+        const dateKey = record.timestamp.toISOString().split('T')[0]
+
+        // Daily stats
+        if (!dailyStats[dateKey]) {
+          dailyStats[dateKey] = { present: 0, absent: 0, total: 0 }
+        }
+        dailyStats[dateKey].total++
+        if (record.status === 'present') {
+          dailyStats[dateKey].present++
+        } else if (record.status === 'absent') {
+          dailyStats[dateKey].absent++
+        }
+
+        // Worker stats
+        if (!workerStats[record.workerId]) {
+          workerStats[record.workerId] = {
+            name: record.workerName,
+            present: 0,
+            absent: 0,
+            total: 0
+          }
+        }
+        workerStats[record.workerId].total++
+        if (record.status === 'present') {
+          workerStats[record.workerId].present++
+        } else if (record.status === 'absent') {
+          workerStats[record.workerId].absent++
+        }
+      })
+
+      return {
+        totalRecords,
+        presentCount,
+        absentCount,
+        attendanceRate,
+        dailyStats,
+        workerStats
+      }
+
+    } catch (error) {
+      console.error("❌ [WorkerAttendanceService] Error generating statistics:", error)
+      throw new Error(`Failed to generate statistics: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 }

@@ -10,7 +10,7 @@ import {
   Alert,
   FlatList,
 } from "react-native"
-import { Card, Text, Button, Chip, Searchbar } from "react-native-paper"
+import { Card, Text, Button, Chip, Searchbar, Menu } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
 import { collection, getDocs, query, where, addDoc } from "firebase/firestore"
 import { FIRESTORE_DB } from "../../../FirebaseConfig"
@@ -43,8 +43,18 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedTab, setSelectedTab] = useState<"unassigned" | "assigned">("unassigned")
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive" | "maintenance">("all")
+  const [vehicleTypeFilter, setVehicleTypeFilter] = useState<"all" | "truck" | "van" | "compactor" | "tipper">("all")
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("all")
+  const [driverFilter, setDriverFilter] = useState<"all" | "assigned" | "unassigned">("all")
+  const [availabilityFilter, setAvailabilityFilter] = useState<"all" | "available" | "busy" | "maintenance">("all")
   const [selectedVehicle, setSelectedVehicle] = useState<VehicleWithAssignment | null>(null)
   const [showContractorSelection, setShowContractorSelection] = useState(false)
+
+  // Dropdown Menus for Filters
+  const [statusMenuVisible, setStatusMenuVisible] = useState(false)
+  const [typeMenuVisible, setTypeMenuVisible] = useState(false)
+  const [dateMenuVisible, setDateMenuVisible] = useState(false)
+  const [availabilityMenuVisible, setAvailabilityMenuVisible] = useState(false)
 
   useEffect(() => {
     fetchData()
@@ -180,49 +190,7 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
     }
   }
 
-  const createTestContractor = async () => {
-    try {
-      console.log("🏗️ [VehicleAssignment] Creating test contractor...")
 
-      // Generate unique contractor data
-      const timestamp = Date.now()
-      const testContractor = {
-        uid: `test-contractor-${timestamp}`,
-        fullName: `Test Contractor ${timestamp}`,
-        email: `contractor${timestamp}@swachh-netra.com`,
-        role: "transport_contractor",
-        phoneNumber: "+91-9876543210",
-        isActive: true,
-        companyName: "Test Waste Management Co.",
-        licenseNumber: `LIC${timestamp}`,
-        serviceAreas: ["Ward 1", "Ward 2"],
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-
-      console.log("📝 [VehicleAssignment] Creating contractor with data:", testContractor)
-      const docRef = await addDoc(collection(FIRESTORE_DB, "users"), testContractor)
-      console.log("✅ [VehicleAssignment] Test contractor created with ID:", docRef.id)
-
-      Alert.alert(
-        "Success",
-        `Test contractor "${testContractor.fullName}" created successfully!\n\nEmail: ${testContractor.email}`,
-        [
-          { text: "OK", onPress: () => fetchContractors() }
-        ]
-      )
-    } catch (error) {
-      console.error("❌ [VehicleAssignment] Error creating test contractor:", error)
-      Alert.alert(
-        "Error",
-        `Failed to create test contractor: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        [
-          { text: "OK" },
-          { text: "Retry", onPress: createTestContractor }
-        ]
-      )
-    }
-  }
 
   const checkDatabaseStatus = async () => {
     try {
@@ -348,6 +316,51 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
     // Filter by status
     if (statusFilter !== "all") {
       vehicleList = vehicleList.filter(vehicle => vehicle.status === statusFilter)
+    }
+
+    // Filter by vehicle type
+    if (vehicleTypeFilter !== "all") {
+      vehicleList = vehicleList.filter(vehicle =>
+        vehicle.vehicleType.toLowerCase() === vehicleTypeFilter.toLowerCase()
+      )
+    }
+
+    // Filter by date (registration date)
+    if (dateFilter !== "all") {
+      const now = new Date()
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
+      const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
+
+      vehicleList = vehicleList.filter(vehicle => {
+        const regDate = new Date(vehicle.registrationDate)
+        switch (dateFilter) {
+          case "today":
+            return regDate >= today
+          case "week":
+            return regDate >= weekAgo
+          case "month":
+            return regDate >= monthAgo
+          default:
+            return true
+        }
+      })
+    }
+
+    // Filter by availability (based on status and assignment)
+    if (availabilityFilter !== "all") {
+      vehicleList = vehicleList.filter(vehicle => {
+        switch (availabilityFilter) {
+          case "available":
+            return vehicle.status === "active" && !vehicle.isAssigned
+          case "busy":
+            return vehicle.isAssigned && vehicle.status === "active"
+          case "maintenance":
+            return vehicle.status === "maintenance"
+          default:
+            return true
+        }
+      })
     }
 
     // Filter by search query
@@ -566,29 +579,91 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
             style={styles.searchBar}
           />
 
-          {/* Status Filter */}
-          <View style={styles.filterContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View style={styles.filterChips}>
-                {(["all", "active", "inactive", "maintenance"] as const).map((status) => (
-                  <Chip
-                    key={status}
-                    selected={statusFilter === status}
-                    onPress={() => setStatusFilter(status)}
-                    style={[
-                      styles.filterChip,
-                      statusFilter === status && styles.filterChipSelected
-                    ]}
-                    textStyle={[
-                      styles.filterChipText,
-                      statusFilter === status && styles.filterChipTextSelected
-                    ]}
-                  >
-                    {status === "all" ? "All Status" : status.charAt(0).toUpperCase() + status.slice(1)}
-                  </Chip>
-                ))}
-              </View>
-            </ScrollView>
+          {/* Simplified Dropdown Filters */}
+          <View style={styles.filterBar}>
+            {/* Status Dropdown */}
+            <Menu
+              visible={statusMenuVisible}
+              onDismiss={() => setStatusMenuVisible(false)}
+              anchor={
+                <TouchableOpacity
+                  style={styles.filterPill}
+                  onPress={() => setStatusMenuVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="info" size={16} color="#374151" />
+                  <Text style={styles.filterPillText}>Status: {statusFilter === 'all' ? 'All' : statusFilter}</Text>
+                  <MaterialIcons name="arrow-drop-down" size={18} color="#374151" />
+                </TouchableOpacity>
+              }
+            >
+              {(['all', 'active', 'inactive', 'maintenance'] as const).map(opt => (
+                <Menu.Item key={opt} onPress={() => { setStatusFilter(opt); setStatusMenuVisible(false) }} title={opt === 'all' ? 'All' : opt.charAt(0).toUpperCase() + opt.slice(1)} />
+              ))}
+            </Menu>
+
+            {/* Type Dropdown */}
+            <Menu
+              visible={typeMenuVisible}
+              onDismiss={() => setTypeMenuVisible(false)}
+              anchor={
+                <TouchableOpacity
+                  style={styles.filterPill}
+                  onPress={() => setTypeMenuVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="local-shipping" size={16} color="#374151" />
+                  <Text style={styles.filterPillText}>Type: {vehicleTypeFilter === 'all' ? 'All' : vehicleTypeFilter}</Text>
+                  <MaterialIcons name="arrow-drop-down" size={18} color="#374151" />
+                </TouchableOpacity>
+              }
+            >
+              {(['all', 'truck', 'van', 'compactor', 'tipper'] as const).map(opt => (
+                <Menu.Item key={opt} onPress={() => { setVehicleTypeFilter(opt); setTypeMenuVisible(false) }} title={opt === 'all' ? 'All' : opt.charAt(0).toUpperCase() + opt.slice(1)} />
+              ))}
+            </Menu>
+
+            {/* Registered Date Dropdown */}
+            <Menu
+              visible={dateMenuVisible}
+              onDismiss={() => setDateMenuVisible(false)}
+              anchor={
+                <TouchableOpacity
+                  style={styles.filterPill}
+                  onPress={() => setDateMenuVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="calendar-today" size={16} color="#374151" />
+                  <Text style={styles.filterPillText}>Registered: {dateFilter === 'all' ? 'All Time' : (dateFilter === 'today' ? 'Today' : dateFilter === 'week' ? 'This Week' : 'This Month')}</Text>
+                  <MaterialIcons name="arrow-drop-down" size={18} color="#374151" />
+                </TouchableOpacity>
+              }
+            >
+              {(['all', 'today', 'week', 'month'] as const).map(opt => (
+                <Menu.Item key={opt} onPress={() => { setDateFilter(opt); setDateMenuVisible(false) }} title={opt === 'all' ? 'All Time' : (opt === 'today' ? 'Today' : opt === 'week' ? 'This Week' : 'This Month')} />
+              ))}
+            </Menu>
+
+            {/* Availability Dropdown */}
+            <Menu
+              visible={availabilityMenuVisible}
+              onDismiss={() => setAvailabilityMenuVisible(false)}
+              anchor={
+                <TouchableOpacity
+                  style={styles.filterPill}
+                  onPress={() => setAvailabilityMenuVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="event-available" size={16} color="#374151" />
+                  <Text style={styles.filterPillText}>Availability: {availabilityFilter === 'all' ? 'All' : availabilityFilter}</Text>
+                  <MaterialIcons name="arrow-drop-down" size={18} color="#374151" />
+                </TouchableOpacity>
+              }
+            >
+              {(['all', 'available', 'busy', 'maintenance'] as const).map(opt => (
+                <Menu.Item key={opt} onPress={() => { setAvailabilityFilter(opt); setAvailabilityMenuVisible(false) }} title={opt === 'all' ? 'All' : opt.charAt(0).toUpperCase() + opt.slice(1)} />
+              ))}
+            </Menu>
           </View>
 
           <View style={styles.tabContainer}>
@@ -700,15 +775,12 @@ const VehicleAssignmentScreen = ({ navigation }: any) => {
               </View>
 
               {contractors.length === 0 && (
-                <View style={styles.actionButtons}>
-                  <Button
-                    mode="contained"
-                    onPress={createTestContractor}
-                    style={[styles.actionButton, { marginHorizontal: 20 }]}
-                    icon="add"
-                  >
-                    Create Test Contractor
-                  </Button>
+                <View style={styles.emptyContractors}>
+                  <MaterialIcons name="business" size={48} color="#9ca3af" />
+                  <Text style={styles.emptyTitle}>No Contractors Available</Text>
+                  <Text style={styles.emptyText}>
+                    Please add contractors through User Management before assigning vehicles.
+                  </Text>
                 </View>
               )}
 
@@ -811,23 +883,36 @@ const styles = StyleSheet.create({
     elevation: 0,
     marginBottom: 16,
   },
-  filterContainer: {
-    marginBottom: 16,
-  },
-  filterChips: {
-    flexDirection: "row",
+  // Simplified dropdown filter bar
+  filterBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
-    paddingHorizontal: 4,
+    alignItems: 'center',
+    marginBottom: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 12,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
   },
-  filterChip: {
-    backgroundColor: "#ffffff",
-    borderColor: "#d1d5db",
+  filterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#ffffff',
   },
-  filterChipSelected: {
-    backgroundColor: "#3b82f6",
-  },
-  filterChipText: {
-    color: "#6b7280",
+  filterPillText: {
+    fontSize: 13,
+    color: '#374151',
+    marginHorizontal: 6,
   },
   filterChipTextSelected: {
     color: "#ffffff",
@@ -1111,6 +1196,23 @@ const styles = StyleSheet.create({
     color: "#374151",
     marginLeft: 8,
     fontWeight: "500",
+  },
+  emptyContractors: {
+    padding: 40,
+    alignItems: "center",
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#6b7280",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#9ca3af",
+    textAlign: "center",
+    lineHeight: 20,
   },
   statusWarning: {
     fontSize: 12,

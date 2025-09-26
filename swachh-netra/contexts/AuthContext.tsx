@@ -220,7 +220,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  // Refresh user data
+  // Refresh user data 
   const refreshUserData = async () => {
     try {
       if (user) {
@@ -321,22 +321,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           canApproveRequests: true,
           canManageFeederPoints: true,
           canManageVehicles: true,
-          canManageAssignments: true
+          canManageAssignments: true,
+          canAssignDriversToContractors: true,
+          canViewAllAttendance: true,
+          canManageDriverAssignments: true,
+          canEditAttendanceRecords: true,
+          canBulkUpdateAttendance: true,
+          canExportAttendanceData: true,
+          canManageAttendancePolicies: true,
+          canFilterAttendanceByEmployee: true
         };
       case 'transport_contractor':
         return {
-          canManageDrivers: true,
+          canManageDrivers: false, // Cannot assign drivers to themselves
           canViewDriverReports: true,
           canAssignRoutes: true,
           canManageVehicles: true,
-          canApproveDrivers: true
+          canApproveDrivers: false, // Cannot approve drivers
+          canAssignVehiclesToDrivers: true, // Can assign vehicles to already assigned drivers
+          canViewAssignedDriverAttendance: true
         };
       case 'swachh_hr':
         return {
           canManageWorkers: true,
           canViewReports: true,
           canAssignTasks: true,
-          canGenerateReports: true
+          canGenerateReports: true,
+          canViewAllAttendance: true,
+          canFilterAttendanceByEmployee: true,
+          canExportAttendanceData: true,
+          canEditAttendanceRecords: true,
+          canBulkUpdateAttendance: true,
+          canManageAttendancePolicies: true
         };
       case 'driver':
       default:

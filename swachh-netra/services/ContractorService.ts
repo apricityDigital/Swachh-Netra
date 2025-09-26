@@ -439,12 +439,13 @@ export class ContractorService {
     }
   }
 
-  // Assign vehicle to driver
+  // Assign vehicle to driver (requires driver to already be assigned to contractor)
   static async assignVehicleToDriver(
     contractorId: string,
     vehicleId: string,
     driverId: string,
-    feederPointIds: string[]
+    feederPointIds: string[],
+    assignedBy?: string // Optional: who is performing the assignment
   ): Promise<void> {
     try {
       console.log("🔄 [ContractorService] Starting vehicle assignment:", {
@@ -470,39 +471,28 @@ export class ContractorService {
         throw new Error("Vehicle is already assigned to another driver")
       }
 
-      // Check if driver exists
+      // Check if driver exists and is assigned to this contractor
       const driverDoc = await getDoc(doc(FIRESTORE_DB, "users", driverId))
       if (!driverDoc.exists()) {
         throw new Error("Driver not found")
       }
 
+      const driverData = driverDoc.data()
+      if (driverData.role !== 'driver') {
+        throw new Error("User is not a driver")
+      }
+
+      // Ensure driver is already assigned to this contractor
+      if (driverData.contractorId !== contractorId) {
+        throw new Error("Driver must be assigned to this contractor before vehicle assignment. Please contact admin to assign the driver first.")
+      }
+
       const batch = writeBatch(FIRESTORE_DB)
 
-      // First, deactivate any existing assignments for this driver
-      const existingAssignmentsQuery = query(
-        collection(FIRESTORE_DB, "driverAssignments"),
-        where("driverId", "==", driverId),
-        where("status", "==", "active")
-      )
-      const existingAssignments = await getDocs(existingAssignmentsQuery)
-
-      existingAssignments.forEach((doc) => {
-        batch.update(doc.ref, { status: "inactive", updatedAt: serverTimestamp() })
-      })
-
-      // Create new driver assignment
-      const driverAssignmentRef = doc(collection(FIRESTORE_DB, "driverAssignments"))
-      const driverAssignment = {
-        driverId,
-        contractorId,
-        vehicleId,
-        feederPointIds,
-        assignedAt: serverTimestamp(),
-        assignedBy: contractorId,
-        status: "active",
-        shiftType: "morning", // Default shift
+      // Check if driver already has a vehicle assigned
+      if (driverData.assignedVehicleId && driverData.assignedVehicleId !== vehicleId) {
+        throw new Error(`Driver is already assigned to vehicle: ${driverData.assignedVehicleId}`)
       }
-      batch.set(driverAssignmentRef, driverAssignment)
 
       // Update vehicle assignment
       const vehicleRef = doc(FIRESTORE_DB, "vehicles", vehicleId)
@@ -538,12 +528,11 @@ export class ContractorService {
         batch.set(feederPointAssignmentRef, feederPointAssignment)
       }
 
-      // Update driver with assigned vehicle
+      // Update driver with assigned vehicle and feeder points only
       const driverRef = doc(FIRESTORE_DB, "users", driverId)
       batch.update(driverRef, {
         assignedVehicleId: vehicleId,
         assignedFeederPointIds: feederPointIds,
-        contractorId: contractorId,
         updatedAt: serverTimestamp(),
       })
 
@@ -650,8 +639,8 @@ export class ContractorService {
       } catch (dailyAssignmentError) {
         console.error("❌ [ContractorService] Failed to create daily assignment:", dailyAssignmentError)
         console.error("❌ [ContractorService] Daily assignment error details:", {
-          message: dailyAssignmentError.message,
-          stack: dailyAssignmentError.stack
+          message: dailyAssignmentError instanceof Error ? dailyAssignmentError.message : 'Unknown error',
+          stack: dailyAssignmentError instanceof Error ? dailyAssignmentError.stack : undefined
         })
         // Don't throw error here as the main assignment was successful
       }

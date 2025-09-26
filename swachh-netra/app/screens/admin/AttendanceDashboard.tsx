@@ -13,16 +13,17 @@ import {
 } from "react-native"
 import { Card, Text, Button, Chip, Searchbar, DataTable } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
-import { 
-  collection, 
-  query, 
-  where, 
-  orderBy, 
-  getDocs, 
-  Timestamp 
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  getDocs,
+  Timestamp
 } from 'firebase/firestore'
 import { FIRESTORE_DB } from "../../../FirebaseConfig"
 import { useRequireAuth } from "../../hooks/useRequireAuth"
+import { WorkerAttendanceService } from "../../../services/WorkerAttendanceService"
 import AdminHeader from "../../components/AdminHeader"
 import AdminSidebar from "../../components/AdminSidebar"
 
@@ -53,8 +54,11 @@ interface AttendanceStats {
 }
 
 const AttendanceDashboard = ({ navigation }: any) => {
-  const { userData } = useRequireAuth(navigation)
-  
+  const { userData, hasPermission } = useRequireAuth(navigation, {
+    requiredRole: 'admin',
+    requiredPermission: 'canViewAllAttendance'
+  })
+
   const [loading, setLoading] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -69,6 +73,19 @@ const AttendanceDashboard = ({ navigation }: any) => {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [sidebarVisible, setSidebarVisible] = useState(false)
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null)
+
+  // Enhanced filtering and management states
+  const [viewMode, setViewMode] = useState<'day' | 'range' | 'monthly'>('day')
+  const [startDate, setStartDate] = useState(new Date())
+  const [endDate, setEndDate] = useState(new Date())
+  const [selectedMonth, setSelectedMonth] = useState(new Date())
+  const [employeeFilter, setEmployeeFilter] = useState("")
+  const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [bulkMode, setBulkMode] = useState(false)
+  const [selectedRecords, setSelectedRecords] = useState<Set<string>>(new Set())
+  const [showBulkActions, setShowBulkActions] = useState(false)
+  const [showAnalytics, setShowAnalytics] = useState(false)
 
   useEffect(() => {
     fetchAttendanceData()
@@ -86,7 +103,7 @@ const AttendanceDashboard = ({ navigation }: any) => {
       // Get start and end of selected date
       const startOfDay = new Date(selectedDate)
       startOfDay.setHours(0, 0, 0, 0)
-      
+
       const endOfDay = new Date(selectedDate)
       endOfDay.setHours(23, 59, 59, 999)
 
@@ -199,6 +216,96 @@ const AttendanceDashboard = ({ navigation }: any) => {
     setSelectedDate(newDate)
   }
 
+  // Management functions
+  const handleEditRecord = (record: AttendanceRecord) => {
+    setEditingRecord(record)
+    setShowEditModal(true)
+  }
+
+  const handleUpdateRecord = async (updatedRecord: AttendanceRecord) => {
+    try {
+      // Update the record in the database
+      await WorkerAttendanceService.updateAttendanceRecord(updatedRecord.id, {
+        status: updatedRecord.status,
+        notes: updatedRecord.notes,
+        timestamp: updatedRecord.timestamp
+      })
+
+      // Update local state
+      setAttendanceRecords(prev =>
+        prev.map(record =>
+          record.id === updatedRecord.id ? updatedRecord : record
+        )
+      )
+
+      setShowEditModal(false)
+      setEditingRecord(null)
+      Alert.alert("Success", "Attendance record updated successfully")
+    } catch (error) {
+      console.error("Error updating record:", error)
+      Alert.alert("Error", "Failed to update attendance record")
+    }
+  }
+
+  const toggleBulkMode = () => {
+    setBulkMode(!bulkMode)
+    setSelectedRecords(new Set())
+    setShowBulkActions(false)
+  }
+
+  const toggleRecordSelection = (recordId: string) => {
+    const newSelection = new Set(selectedRecords)
+    if (newSelection.has(recordId)) {
+      newSelection.delete(recordId)
+    } else {
+      newSelection.add(recordId)
+    }
+    setSelectedRecords(newSelection)
+    setShowBulkActions(newSelection.size > 0)
+  }
+
+  const handleBulkMarkPresent = async () => {
+    try {
+      const recordsToUpdate = Array.from(selectedRecords)
+      await WorkerAttendanceService.bulkUpdateAttendanceStatus(recordsToUpdate, 'present')
+
+      // Update local state
+      setAttendanceRecords(prev =>
+        prev.map(record =>
+          selectedRecords.has(record.id) ? { ...record, status: 'present' } : record
+        )
+      )
+
+      setSelectedRecords(new Set())
+      setShowBulkActions(false)
+      Alert.alert("Success", `Marked ${recordsToUpdate.length} workers as present`)
+    } catch (error) {
+      console.error("Error in bulk update:", error)
+      Alert.alert("Error", "Failed to update attendance records")
+    }
+  }
+
+  const handleBulkMarkAbsent = async () => {
+    try {
+      const recordsToUpdate = Array.from(selectedRecords)
+      await WorkerAttendanceService.bulkUpdateAttendanceStatus(recordsToUpdate, 'absent')
+
+      // Update local state
+      setAttendanceRecords(prev =>
+        prev.map(record =>
+          selectedRecords.has(record.id) ? { ...record, status: 'absent' } : record
+        )
+      )
+
+      setSelectedRecords(new Set())
+      setShowBulkActions(false)
+      Alert.alert("Success", `Marked ${recordsToUpdate.length} workers as absent`)
+    } catch (error) {
+      console.error("Error in bulk update:", error)
+      Alert.alert("Error", "Failed to update attendance records")
+    }
+  }
+
   const exportAttendanceData = () => {
     Alert.alert("Coming Soon", "Attendance export functionality will be implemented")
   }
@@ -215,7 +322,7 @@ const AttendanceDashboard = ({ navigation }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
+
       <AdminHeader
         title="Attendance Dashboard"
         subtitle="Worker attendance tracking"
@@ -237,23 +344,23 @@ const AttendanceDashboard = ({ navigation }: any) => {
             >
               <MaterialIcons name="chevron-left" size={24} color="#2563eb" />
             </TouchableOpacity>
-            
+
             <View style={styles.dateInfo}>
               <Text style={styles.dateText}>{formatDate(selectedDate)}</Text>
               <Text style={styles.dateSubtext}>
                 {selectedDate.toDateString() === new Date().toDateString() ? "Today" : ""}
               </Text>
             </View>
-            
+
             <TouchableOpacity
               style={styles.dateButton}
               onPress={() => handleDateChange(1)}
               disabled={selectedDate.toDateString() === new Date().toDateString()}
             >
-              <MaterialIcons 
-                name="chevron-right" 
-                size={24} 
-                color={selectedDate.toDateString() === new Date().toDateString() ? "#9ca3af" : "#2563eb"} 
+              <MaterialIcons
+                name="chevron-right"
+                size={24}
+                color={selectedDate.toDateString() === new Date().toDateString() ? "#9ca3af" : "#2563eb"}
               />
             </TouchableOpacity>
           </View>
@@ -311,7 +418,7 @@ const AttendanceDashboard = ({ navigation }: any) => {
         {/* Attendance Records */}
         <Card style={styles.recordsCard}>
           <Text style={styles.cardTitle}>Attendance Records ({filteredRecords.length})</Text>
-          
+
           {filteredRecords.length === 0 ? (
             <View style={styles.emptyState}>
               <MaterialIcons name="event-busy" size={48} color="#9ca3af" />
@@ -334,7 +441,7 @@ const AttendanceDashboard = ({ navigation }: any) => {
                         Driver: {record.driverName}
                       </Text>
                     </View>
-                    
+
                     <View style={styles.recordStatus}>
                       <MaterialIcons
                         name={getStatusIcon(record.status)}
@@ -355,7 +462,7 @@ const AttendanceDashboard = ({ navigation }: any) => {
                       </Chip>
                     </View>
                   </View>
-                  
+
                   {record.photoUri && (
                     <TouchableOpacity
                       style={styles.photoButton}
@@ -365,7 +472,7 @@ const AttendanceDashboard = ({ navigation }: any) => {
                       <Text style={styles.photoButtonText}>View Photo</Text>
                     </TouchableOpacity>
                   )}
-                  
+
                   {record.notes && (
                     <Text style={styles.notesText}>Notes: {record.notes}</Text>
                   )}

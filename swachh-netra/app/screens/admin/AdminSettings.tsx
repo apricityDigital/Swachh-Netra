@@ -12,11 +12,10 @@ import {
 } from "react-native"
 import { Card, Text, Button, TextInput, Divider } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
-import { signOut } from "firebase/auth"
-import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 import AdminSidebar from "../../components/AdminSidebar"
 import ProtectedRoute from "../../components/ProtectedRoute"
 import { useRequireAdmin } from "../../hooks/useRequireAuth"
+import { useQuickLogout } from "../../hooks/useLogout"
 
 interface SystemSettings {
   maintenanceMode: boolean
@@ -104,23 +103,8 @@ const AdminSettings = ({ navigation }: any) => {
     )
   }
 
-  const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await signOut(FIREBASE_AUTH)
-            navigation.replace("Login")
-          } catch (error) {
-            Alert.alert("Error", "Failed to logout")
-          }
-        },
-      },
-    ])
-  }
+  // Using professional logout - import useQuickLogout at the top
+  const { quickLogout, AlertComponent } = useQuickLogout(navigation)
 
   const updateSetting = (key: keyof SystemSettings, value: any) => {
     setSettings(prev => ({ ...prev, [key]: value }))
@@ -305,7 +289,7 @@ const AdminSettings = ({ navigation }: any) => {
                 </Text>
               </TouchableOpacity>
               <Divider />
-              <TouchableOpacity style={styles.actionButton} onPress={handleLogout}>
+              <TouchableOpacity style={styles.actionButton} onPress={quickLogout}>
                 <MaterialIcons name="logout" size={24} color="#ef4444" />
                 <Text style={[styles.actionButtonText, { color: "#ef4444" }]}>
                   Logout
@@ -345,6 +329,9 @@ const AdminSettings = ({ navigation }: any) => {
           onClose={() => setSidebarVisible(false)}
           currentScreen="AdminSettings"
         />
+
+        {/* Professional Alert Component */}
+        <AlertComponent />
       </SafeAreaView>
     </ProtectedRoute>
   )

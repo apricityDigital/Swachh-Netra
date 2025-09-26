@@ -13,11 +13,10 @@ import {
 } from "react-native"
 import { Card, Text, Button } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
-import { signOut } from "firebase/auth"
-import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 import AdminHeader from "../../components/AdminHeader"
 import { ContractorService, ContractorDashboardStats } from "../../../services/ContractorService"
 import FirebaseService from "../../../services/FirebaseService"
+import { useQuickLogout } from "../../hooks/useLogout"
 
 const { width } = Dimensions.get("window")
 
@@ -169,23 +168,8 @@ const ContractorDashboard = ({ navigation }: any) => {
     setRefreshing(false)
   }, [])
 
-  const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await signOut(FIREBASE_AUTH)
-            navigation.replace("Login")
-          } catch (error) {
-            Alert.alert("Error", "Failed to logout")
-          }
-        },
-      },
-    ])
-  }
+  // Using professional logout - import useQuickLogout at the top
+  const { quickLogout, AlertComponent } = useQuickLogout(navigation)
 
   const handleAction = (screen: string) => {
     if (!contractorId) {
@@ -260,7 +244,7 @@ const ContractorDashboard = ({ navigation }: any) => {
         isDashboard={true}
         userName={userName}
         showLogoutButton={true}
-        onLogoutPress={handleLogout}
+        onLogoutPress={quickLogout}
       />
 
       <ScrollView
@@ -468,6 +452,9 @@ const ContractorDashboard = ({ navigation }: any) => {
           </Card>
         </View>
       </ScrollView>
+
+      {/* Professional Alert Component */}
+      <AlertComponent />
     </SafeAreaView>
   )
 }

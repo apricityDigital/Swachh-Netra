@@ -192,35 +192,55 @@ const WorkerApprovals = ({ navigation }: any) => {
   }
 
   const renderRequestCard = ({ item }: { item: WorkerApprovalRequest }) => (
-    <Card style={styles.requestCard}>
-      <TouchableOpacity onPress={() => showRequestDetails(item)}>
+    <TouchableOpacity
+      onPress={() => showRequestDetails(item)}
+      activeOpacity={0.7}
+      style={styles.cardTouchable}
+    >
+      <Card style={[styles.requestCard, item.status === 'pending' && styles.pendingCard]}>
         <View style={styles.requestHeader}>
           <View style={styles.requestInfo}>
             <View style={styles.requestTitleRow}>
-              <MaterialIcons 
-                name={getRequestTypeIcon(item.type) as any} 
-                size={20} 
-                color={getRequestTypeColor(item.type)} 
-              />
-              <Text style={styles.requestTitle}>
-                {item.type === 'worker_add' ? 'Add Worker' : 
-                 item.type === 'worker_edit' ? 'Edit Worker' : 'Delete Worker'}
-              </Text>
-              <Chip 
+              <View style={[styles.requestTypeIcon, { backgroundColor: `${getRequestTypeColor(item.type)}15` }]}>
+                <MaterialIcons
+                  name={getRequestTypeIcon(item.type) as any}
+                  size={20}
+                  color={getRequestTypeColor(item.type)}
+                />
+              </View>
+              <View style={styles.requestTitleContent}>
+                <Text style={styles.requestTitle}>
+                  {item.type === 'worker_add' ? 'Add Worker' :
+                    item.type === 'worker_edit' ? 'Edit Worker' : 'Delete Worker'}
+                </Text>
+                <Text style={styles.workerName}>
+                  {item.workerData?.fullName || item.originalData?.fullName || 'Unknown Worker'}
+                </Text>
+              </View>
+              <Chip
                 style={[styles.statusChip, { backgroundColor: `${getStatusColor(item.status)}20` }]}
                 textStyle={[styles.statusText, { color: getStatusColor(item.status) }]}
               >
                 {item.status.toUpperCase()}
               </Chip>
             </View>
-            
-            <Text style={styles.workerName}>
-              {item.workerData?.fullName || item.originalData?.fullName || 'Unknown Worker'}
-            </Text>
-            
-            <Text style={styles.requestDate}>
-              Requested on {new Date(item.requestedAt).toLocaleDateString()}
-            </Text>
+
+            <View style={styles.requestMetadata}>
+              <View style={styles.metadataItem}>
+                <MaterialIcons name="schedule" size={14} color="#6b7280" />
+                <Text style={styles.requestDate}>
+                  {new Date(item.requestedAt).toLocaleDateString()}
+                </Text>
+              </View>
+              {item.requestedBy && (
+                <View style={styles.metadataItem}>
+                  <MaterialIcons name="person" size={14} color="#6b7280" />
+                  <Text style={styles.requestedBy}>
+                    by {item.requestedBy}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
         </View>
 
@@ -228,28 +248,36 @@ const WorkerApprovals = ({ navigation }: any) => {
           <>
             <Divider style={styles.divider} />
             <View style={styles.requestActions}>
-              <Button
-                mode="outlined"
-                onPress={() => handleRejectRequest(item)}
-                style={styles.rejectButton}
-                textColor="#ef4444"
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleRejectRequest(item);
+                }}
+                style={[styles.actionButton, styles.rejectButton]}
                 disabled={operationLoading}
+                activeOpacity={0.7}
               >
-                Reject
-              </Button>
-              <Button
-                mode="contained"
-                onPress={() => handleApproveRequest(item)}
-                style={styles.approveButton}
+                <MaterialIcons name="close" size={18} color="#ef4444" />
+                <Text style={styles.rejectButtonText}>Reject</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleApproveRequest(item);
+                }}
+                style={[styles.actionButton, styles.approveButton]}
                 disabled={operationLoading}
+                activeOpacity={0.7}
               >
-                Approve
-              </Button>
+                <MaterialIcons name="check" size={18} color="#ffffff" />
+                <Text style={styles.approveButtonText}>Approve</Text>
+              </TouchableOpacity>
             </View>
           </>
         )}
-      </TouchableOpacity>
-    </Card>
+      </Card>
+    </TouchableOpacity>
   )
 
   if (loading) {
@@ -264,7 +292,7 @@ const WorkerApprovals = ({ navigation }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerContent}>
@@ -374,7 +402,7 @@ const WorkerApprovals = ({ navigation }: any) => {
                     <Text style={styles.detailLabel}>Type:</Text>
                     <Text style={styles.detailValue}>
                       {selectedRequest.type === 'worker_add' ? 'Add Worker' :
-                       selectedRequest.type === 'worker_edit' ? 'Edit Worker' : 'Delete Worker'}
+                        selectedRequest.type === 'worker_edit' ? 'Edit Worker' : 'Delete Worker'}
                     </Text>
                   </View>
                   <View style={styles.detailRow}>
@@ -635,15 +663,23 @@ const styles = StyleSheet.create({
     color: "#374151",
   },
   // Request card styles
+  cardTouchable: {
+    marginBottom: 16,
+  },
   requestCard: {
     backgroundColor: "#ffffff",
     borderRadius: 12,
-    marginBottom: 16,
     elevation: 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
+    borderWidth: 1,
+    borderColor: "#f3f4f6",
+  },
+  pendingCard: {
+    borderColor: "#fbbf24",
+    borderWidth: 1,
   },
   requestHeader: {
     padding: 16,
@@ -653,15 +689,25 @@ const styles = StyleSheet.create({
   },
   requestTitleRow: {
     flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 12,
+    gap: 12,
+  },
+  requestTypeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    justifyContent: "center",
     alignItems: "center",
-    marginBottom: 8,
-    gap: 8,
+  },
+  requestTitleContent: {
+    flex: 1,
   },
   requestTitle: {
     fontSize: 16,
     fontWeight: "600",
     color: "#111827",
-    flex: 1,
+    marginBottom: 2,
   },
   statusChip: {
     height: 24,
@@ -674,11 +720,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#3b82f6",
     fontWeight: "500",
-    marginBottom: 4,
+  },
+  requestMetadata: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    marginTop: 8,
+  },
+  metadataItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   requestDate: {
     fontSize: 12,
-    color: "#9ca3af",
+    color: "#6b7280",
+    fontWeight: "400",
+  },
+  requestedBy: {
+    fontSize: 12,
+    color: "#6b7280",
+    fontWeight: "400",
   },
   divider: {
     marginHorizontal: 16,
@@ -689,13 +751,33 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
   },
-  rejectButton: {
+  actionButton: {
     flex: 1,
-    borderColor: "#ef4444",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    gap: 6,
+  },
+  rejectButton: {
+    backgroundColor: "#fef2f2",
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  rejectButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#ef4444",
   },
   approveButton: {
-    flex: 1,
     backgroundColor: "#10b981",
+  },
+  approveButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#ffffff",
   },
   // Empty state styles
   emptyCard: {

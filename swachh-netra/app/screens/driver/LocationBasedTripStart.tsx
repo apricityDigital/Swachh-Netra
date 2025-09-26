@@ -14,10 +14,10 @@ import {
 import { Card, Text, Button, Chip, FAB, ProgressBar } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
 import { CameraView, useCameraPermissions } from "expo-camera"
-import { 
-  LocationBasedTripService, 
-  LocationData, 
-  WorkerAttendanceRecord 
+import {
+  LocationBasedTripService,
+  LocationData,
+  WorkerAttendanceRecord
 } from "../../../services/LocationBasedTripService"
 import { useRequireAuth } from "../../hooks/useRequireAuth"
 
@@ -38,7 +38,7 @@ interface AttendanceStatus {
   workerId: string
   status: 'pending' | 'present' | 'absent'
   photoUri?: string
-  notes?: string
+  notes: string // Make notes required with default empty string
 }
 
 const LocationBasedTripStart = ({ navigation, route }: any) => {
@@ -70,34 +70,35 @@ const LocationBasedTripStart = ({ navigation, route }: any) => {
   const checkLocationAndLoadData = async () => {
     try {
       setLoading(true)
-      
+
       // Get current location
       const location = await LocationBasedTripService.getCurrentLocation()
       setCurrentLocation(location)
-      
+
       // Check proximity to feeder point
       const proximityResult = await LocationBasedTripService.checkProximityToFeederPoint(
         feederPoint.id,
         location
       )
-      
+
       setIsWithinRange(proximityResult.isWithinRange)
       setDistance(proximityResult.distance)
-      
+
       // Get assigned workers
       const workers = await LocationBasedTripService.getAssignedWorkers(feederPoint.id)
       setAssignedWorkers(workers)
-      
+
       // Initialize attendance status
       const initialStatus: { [key: string]: AttendanceStatus } = {}
       workers.forEach(worker => {
         initialStatus[worker.id] = {
           workerId: worker.id,
-          status: 'pending'
+          status: 'pending',
+          notes: "" // Initialize with empty string
         }
       })
       setAttendanceStatus(initialStatus)
-      
+
     } catch (error) {
       console.error("Error checking location and loading data:", error)
       Alert.alert("Error", "Failed to check location. Please try again.")
@@ -125,7 +126,7 @@ const LocationBasedTripStart = ({ navigation, route }: any) => {
 
     try {
       setLoading(true)
-      
+
       const tripId = await LocationBasedTripService.startTripSession(
         userData.uid,
         userData.displayName || userData.email || "Unknown Driver",
@@ -134,16 +135,16 @@ const LocationBasedTripStart = ({ navigation, route }: any) => {
         feederPoint.id,
         currentLocation
       )
-      
+
       setTripSessionId(tripId)
       setTripStarted(true)
-      
+
       Alert.alert(
         "Trip Started",
         "Trip has been started successfully. Please mark worker attendance.",
         [{ text: "OK" }]
       )
-      
+
     } catch (error) {
       console.error("Error starting trip:", error)
       Alert.alert("Error", "Failed to start trip. Please try again.")
@@ -211,27 +212,28 @@ const LocationBasedTripStart = ({ navigation, route }: any) => {
 
     try {
       setLoading(true)
-      
+
       // Submit attendance for all workers
       for (const worker of assignedWorkers) {
         const attendance = attendanceStatus[worker.id]
         if (attendance.status !== 'pending') {
+          // Ensure all values are properly sanitized before submission
           await LocationBasedTripService.recordWorkerAttendance(
-            tripSessionId,
-            worker.id,
-            worker.fullName,
-            feederPoint.id,
-            feederPoint.feederPointName,
-            userData.uid,
+            tripSessionId || "",
+            worker.id || "",
+            worker.fullName || "",
+            feederPoint.id || "",
+            feederPoint.feederPointName || "",
+            userData.uid || "",
             userData.displayName || userData.email || "Unknown Driver",
             attendance.status,
             currentLocation,
-            attendance.photoUri,
-            attendance.notes
+            attendance.photoUri || null,
+            attendance.notes || ""
           )
         }
       }
-      
+
       Alert.alert(
         "Attendance Submitted",
         "Worker attendance has been recorded successfully.",
@@ -249,7 +251,7 @@ const LocationBasedTripStart = ({ navigation, route }: any) => {
           }
         ]
       )
-      
+
     } catch (error) {
       console.error("Error submitting attendance:", error)
       Alert.alert("Error", "Failed to submit attendance. Please try again.")
@@ -290,7 +292,7 @@ const LocationBasedTripStart = ({ navigation, route }: any) => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#ffffff" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
@@ -310,14 +312,14 @@ const LocationBasedTripStart = ({ navigation, route }: any) => {
         <Card style={styles.locationCard}>
           <View style={styles.locationContent}>
             <View style={styles.locationHeader}>
-              <MaterialIcons 
-                name="location-on" 
-                size={24} 
-                color={isWithinRange ? "#10b981" : "#ef4444"} 
+              <MaterialIcons
+                name="location-on"
+                size={24}
+                color={isWithinRange ? "#10b981" : "#ef4444"}
               />
               <Text style={styles.locationTitle}>Location Status</Text>
             </View>
-            
+
             <View style={styles.locationDetails}>
               <Text style={styles.locationText}>
                 Distance: {distance.toFixed(0)}m from feeder point
@@ -335,7 +337,7 @@ const LocationBasedTripStart = ({ navigation, route }: any) => {
                 {isWithinRange ? "Within Range" : "Too Far"}
               </Chip>
             </View>
-            
+
             {!isWithinRange && (
               <Text style={styles.warningText}>
                 You need to be within 100m of the feeder point to start the trip.
@@ -371,9 +373,9 @@ const LocationBasedTripStart = ({ navigation, route }: any) => {
                 <Text style={styles.progressText}>
                   {completedAttendance} of {totalWorkers} workers marked
                 </Text>
-                <ProgressBar 
-                  progress={attendanceProgress} 
-                  color="#2563eb" 
+                <ProgressBar
+                  progress={attendanceProgress}
+                  color="#2563eb"
                   style={styles.progressBar}
                 />
               </View>
@@ -428,10 +430,10 @@ const LocationBasedTripStart = ({ navigation, route }: any) => {
                           style={styles.photoButton}
                           onPress={() => handleTakePhoto(worker)}
                         >
-                          <MaterialIcons 
-                            name={attendance.photoUri ? "photo" : "camera-alt"} 
-                            size={20} 
-                            color="#2563eb" 
+                          <MaterialIcons
+                            name={attendance.photoUri ? "photo" : "camera-alt"}
+                            size={20}
+                            color="#2563eb"
                           />
                           <Text style={styles.photoButtonText}>
                             {attendance.photoUri ? "Photo Taken" : "Take Photo"}
