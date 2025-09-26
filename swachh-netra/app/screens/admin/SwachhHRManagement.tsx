@@ -1338,15 +1338,15 @@ const styles = StyleSheet.create({
   },
 
   // Statistics grid
-  statsGrid: {
+statsGrid: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginHorizontal: -SPACING.sm,   // Negative margin for consistent spacing
-  },
-  statCard: {
-    width: "60%", // Increased width for better content fit
-    marginHorizontal: SPACING.sm,
-    marginBottom: SPACING.md,
+    marginHorizontal: -2, // Use a small negative value for tight spacing
+},
+statCard: {
+    width: "70%",
+    marginHorizontal: 1, // Use a very small value for side gap
+    marginBottom: 4,     // Slightly reduce vertical gap
     borderRadius: SPACING.md,
     backgroundColor: "#ffffff",
     elevation: 2,
@@ -1354,39 +1354,41 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-    height: 100, // Fixed height for consistent appearance
-  },
-  statContent: {
+    height: 100,
+},
+statContent: {
     flexDirection: "row",
     alignItems: "center",
     padding: SPACING.lg,
+    marginRight:12,
     height: "100%", // Fill the entire card height
-  },
-  statIconContainer: {
-    width: 48,
-    height: 48,
+},
+
+statIconContainer: {
+    width: 38,
+    height: 38,
     borderRadius: SPACING.md,
     justifyContent: "center",
     alignItems: "center",
     marginRight: SPACING.md,
-  },
-  statInfo: {
+},
+statInfo: {
     flex: 1,
     minWidth: 0, // Prevent text overflow
-  },
-  statNumber: {
+},
+statNumber: {
     fontSize: 24,
     fontWeight: "700",
     color: "#111827",
     marginBottom: SPACING.xs,
     lineHeight: 28,
-  },
-  statLabel: {
+},
+statLabel: {
     fontSize: 12,
     color: "#6b7280",
     fontWeight: "500",
     lineHeight: 16,
-  },
+},
 
   // Search and Filter styles - Perfect alignment
   searchContainer: {
