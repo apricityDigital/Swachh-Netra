@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Text,
     TextInput,
@@ -41,6 +41,18 @@ const Login = () => {
     const slideAnim = useState(new Animated.Value(50))[0];
     const scaleAnim = useState(new Animated.Value(0.9))[0];
     const logoRotateAnim = useState(new Animated.Value(0))[0];
+    const cleaningRotateAnim = useRef(new Animated.Value(0)).current;
+    const sparkleAnim = useRef(new Animated.Value(0)).current;
+    const pulseAnim = useRef(new Animated.Value(0)).current;
+    const ringAnim = useRef(new Animated.Value(0)).current;
+
+    const postLoginTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const [postLoginState, setPostLoginState] = useState({
+        visible: false,
+        title: '',
+        subtitle: '',
+        targetScreen: '' as string | null,
+    });
 
     useEffect(() => {
         console.log('Firebase Auth instance:', auth);
@@ -86,6 +98,117 @@ const Login = () => {
         return () => rotateAnimation.stop();
     }, []);
 
+    useEffect(() => {
+        let cleaningLoop: Animated.CompositeAnimation | null = null;
+        let sparkleLoop: Animated.CompositeAnimation | null = null;
+        let pulseLoop: Animated.CompositeAnimation | null = null;
+        let ringLoop: Animated.CompositeAnimation | null = null;
+
+        if (postLoginState.visible) {
+            cleaningRotateAnim.setValue(0);
+            sparkleAnim.setValue(0);
+            pulseAnim.setValue(0);
+            ringAnim.setValue(0);
+
+            cleaningLoop = Animated.loop(
+                Animated.timing(cleaningRotateAnim, {
+                    toValue: 1,
+                    duration: 2000,
+                    easing: Easing.linear,
+                    useNativeDriver: true,
+                })
+            );
+
+            sparkleLoop = Animated.loop(
+                Animated.sequence([
+                    Animated.timing(sparkleAnim, {
+                        toValue: 1,
+                        duration: 900,
+                        easing: Easing.out(Easing.cubic),
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(sparkleAnim, {
+                        toValue: 0,
+                        duration: 900,
+                        easing: Easing.in(Easing.cubic),
+                        useNativeDriver: true,
+                    }),
+                ])
+            );
+
+            cleaningLoop.start();
+            sparkleLoop.start();
+
+            pulseLoop = Animated.loop(
+                Animated.sequence([
+                    Animated.timing(pulseAnim, {
+                        toValue: 1,
+                        duration: 700,
+                        easing: Easing.out(Easing.quad),
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(pulseAnim, {
+                        toValue: 0,
+                        duration: 700,
+                        easing: Easing.in(Easing.quad),
+                        useNativeDriver: true,
+                    }),
+                ])
+            );
+
+            ringLoop = Animated.loop(
+                Animated.timing(ringAnim, {
+                    toValue: 1,
+                    duration: 1600,
+                    easing: Easing.linear,
+                    useNativeDriver: true,
+                })
+            );
+
+            pulseLoop.start();
+            ringLoop.start();
+        }
+
+        return () => {
+            cleaningLoop?.stop();
+            sparkleLoop?.stop();
+            pulseLoop?.stop();
+            ringLoop?.stop();
+            cleaningRotateAnim.stopAnimation();
+            sparkleAnim.stopAnimation();
+            pulseAnim.stopAnimation();
+            ringAnim.stopAnimation();
+        };
+    }, [postLoginState.visible, cleaningRotateAnim, sparkleAnim, pulseAnim, ringAnim]);
+
+    useEffect(() => {
+        return () => {
+            if (postLoginTimeoutRef.current) {
+                clearTimeout(postLoginTimeoutRef.current);
+            }
+        };
+    }, []);
+
+    const triggerPostLoginLoader = (title: string, subtitle: string, targetScreen: string) => {
+        if (postLoginTimeoutRef.current) {
+            clearTimeout(postLoginTimeoutRef.current);
+        }
+
+        setPostLoginState({
+            visible: true,
+            title,
+            subtitle,
+            targetScreen,
+        });
+
+        postLoginTimeoutRef.current = setTimeout(() => {
+            setPostLoginState(prev => ({ ...prev, visible: false }));
+            if (targetScreen) {
+                navigation.navigate(targetScreen as never);
+            }
+        }, 2200);
+    };
+
     // Function to get user role and navigate accordingly
     const handlePostLoginNavigation = async (user: any) => {
         try {
@@ -99,107 +222,52 @@ const Login = () => {
                 
                 console.log('User role:', userRole);
                 
-                // Navigate based on user role
-                switch (userRole) {
-                    case 'admin':
-                        Alert.alert(
-                            'Welcome Administrator',
-                            `Hello ${userName}! Redirecting to Admin Dashboard...`,
-                            [
-                                {
-                                    text: 'Continue',
-                                    onPress: () => navigation.navigate('AdminDashboard' as never)
-                                }
-                            ],
-                            { cancelable: false }
-                        );
-                        break;
+                const roleConfig: Record<string, { title: string; subtitle: string; target: string }> = {
+                    admin: {
+                        title: 'Welcome Administrator',
+                        subtitle: `Hello ${userName}! Preparing your control center...`,
+                        target: 'AdminDashboard',
+                    },
+                    transport_contractor: {
+                        title: 'Welcome Contractor',
+                        subtitle: `Hello ${userName}! Syncing fleet operations...`,
+                        target: 'ContractorDashboard',
+                    },
+                    driver: {
+                        title: 'Welcome Driver',
+                        subtitle: `Hello ${userName}! Equipping your route tools...`,
+                        target: 'DriverDashboard',
+                    },
+                    swachh_hr: {
+                        title: 'Welcome Swachh HR',
+                        subtitle: `Hello ${userName}! Organizing workforce insights...`,
+                        target: 'SwachhHRDashboard',
+                    },
+                };
 
-                    case 'transport_contractor':
-                        Alert.alert(
-                            'Welcome Contractor',
-                            `Hello ${userName}! Redirecting to Contractor Dashboard...`,
-                            [
-                                {
-                                    text: 'Continue',
-                                    onPress: () => navigation.navigate('ContractorDashboard' as never)
-                                }
-                            ],
-                            { cancelable: false }
-                        );
-                        break;
+                const config = roleConfig[userRole] || {
+                    title: 'Welcome',
+                    subtitle: `Hello ${userName}! Preparing your dashboard...`,
+                    target: 'DriverDashboard',
+                };
 
-                    case 'driver':
-                        Alert.alert(
-                            'Welcome Driver',
-                            `Hello ${userName}! Redirecting to Driver Dashboard...`,
-                            [
-                                {
-                                    text: 'Continue',
-                                    onPress: () => navigation.navigate('DriverDashboard' as never)
-                                }
-                            ],
-                            { cancelable: false }
-                        );
-                        break;
-
-                    case 'swachh_hr':
-                        Alert.alert(
-                            'Welcome Swachh HR',
-                            `Hello ${userName}! Redirecting to Swachh HR Dashboard...`,
-                            [
-                                {
-                                    text: 'Continue',
-                                    onPress: () => navigation.navigate('SwachhHRDashboard' as never)
-                                }
-                            ],
-                            { cancelable: false }
-                        );
-                        break;
-
-                    default:
-                        // Fallback for unknown roles
-                        Alert.alert(
-                            'Welcome',
-                            'Login successful. Redirecting to dashboard...',
-                            [
-                                {
-                                    text: 'Continue',
-                                    onPress: () => navigation.navigate('DriverDashboard' as never)
-                                }
-                            ],
-                            { cancelable: false }
-                        );
-                        break;
-                }
+                triggerPostLoginLoader(config.title, config.subtitle, config.target);
             } else {
                 // If user document doesn't exist in Firestore, treat as driver (default role)
                 console.log('User document not found, treating as driver');
-                Alert.alert(
+                triggerPostLoginLoader(
                     'Welcome',
-                    'Login successful. Redirecting to dashboard...',
-                    [
-                        {
-                            text: 'Continue',
-                            onPress: () => navigation.navigate('DriverDashboard' as never)
-                        }
-                    ],
-                    { cancelable: false }
+                    'Login successful. Preparing your dashboard...',
+                    'DriverDashboard'
                 );
             }
         } catch (error) {
             console.error('Error fetching user role:', error);
             // Fallback to Driver dashboard if there's an error
-            Alert.alert(
-                'Login Error',
-                'There was an issue accessing your profile. Redirecting to default dashboard...',
-                [
-                    {
-                        text: 'Continue',
-                        onPress: () => navigation.navigate('DriverDashboard' as never)
-                    }
-                ],
-                { cancelable: false }
+            triggerPostLoginLoader(
+                'Welcome',
+                'Redirecting to default dashboard...',
+                'DriverDashboard'
             );
         }
     };
@@ -332,6 +400,36 @@ const Login = () => {
         if (hour < 17) return 'Good Afternoon';
         return 'Good Evening';
     };
+
+    const cleaningRotation = cleaningRotateAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0deg', '360deg'],
+    });
+
+    const sparkleScale = sparkleAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.8, 1.15],
+    });
+
+    const sparkleOpacity = sparkleAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.3, 1],
+    });
+
+    const pulseScale = pulseAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [1, 1.08],
+    });
+
+    const ringScale = ringAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.75, 1.35],
+    });
+
+    const ringOpacity = ringAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0.45, 0],
+    });
 
     return (
         <KeyboardAvoidingView 
@@ -636,6 +734,69 @@ const Login = () => {
                     </View>
                 </Animated.View>
             </ScrollView>
+            {postLoginState.visible && (
+                <LinearGradient
+                    colors={['rgba(15, 23, 42, 0.96)', 'rgba(30, 64, 175, 0.92)']}
+                    style={styles.postLoginOverlay}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                >
+                    <View style={styles.postLoginBackdrop} />
+                    <View style={styles.postLoginVisual}>
+                        <Animated.View
+                            style={[styles.cleaningPulseRing, {
+                                transform: [{ scale: ringScale }],
+                                opacity: ringOpacity,
+                            }]}
+                        />
+                        <Animated.View
+                            style={[styles.cleaningIconContainer, {
+                                transform: [
+                                    { rotate: cleaningRotation },
+                                    { scale: pulseScale },
+                                ],
+                            }]}
+                        >
+                            <LinearGradient
+                                colors={['#38bdf8', '#2563eb']}
+                                style={styles.cleaningIconGradient}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                            >
+                                <MaterialIcons name="cleaning-services" size={74} color="#f8fafc" />
+                            </LinearGradient>
+                        </Animated.View>
+                        <Animated.View
+                            style={[styles.sparkleOrb, {
+                                opacity: sparkleOpacity,
+                                transform: [{ scale: sparkleScale }],
+                            }]}
+                        >
+                            <MaterialIcons name="auto-awesome" size={30} color="#e0f2fe" />
+                        </Animated.View>
+                    </View>
+
+                    <View style={styles.postLoginTextContainer}>
+                        <Text style={styles.postLoginTitle}>{postLoginState.title}</Text>
+                        <Text style={styles.postLoginSubtitle}>{postLoginState.subtitle}</Text>
+                        <View style={styles.postLoginProgressBar}>
+                            <Animated.View
+                                style={[styles.postLoginProgressFill, {
+                                    width: sparkleAnim.interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: ['55%', '100%'],
+                                    }),
+                                    opacity: sparkleOpacity,
+                                }]}
+                            />
+                        </View>
+                        <View style={styles.postLoginStatusRow}>
+                            <MaterialIcons name="motion-photos-on" size={16} color="#e0f2fe" />
+                            <Text style={styles.postLoginHint}>Optimizing sanitation workflow...</Text>
+                        </View>
+                    </View>
+                </LinearGradient>
+            )}
         </KeyboardAvoidingView>
     );
 };
@@ -646,10 +807,121 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: '#f0f4f8',
+        position: 'relative',
     },
     scrollContainer: {
         flexGrow: 1,
         minHeight: height,
+    },
+    postLoginOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 32,
+        zIndex: 1000,
+    },
+    postLoginBackdrop: {
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        backgroundColor: 'rgba(15, 23, 42, 0.35)',
+    },
+    postLoginVisual: {
+        width: 180,
+        height: 180,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 32,
+    },
+    cleaningPulseRing: {
+        position: 'absolute',
+        width: 160,
+        height: 160,
+        borderRadius: 80,
+        borderWidth: 2,
+        borderColor: 'rgba(148, 163, 184, 0.35)',
+        backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    },
+    cleaningIconContainer: {
+        width: 132,
+        height: 132,
+        borderRadius: 66,
+        justifyContent: 'center',
+        alignItems: 'center',
+        shadowColor: '#0ea5e9',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.35,
+        shadowRadius: 18,
+        elevation: 14,
+        backgroundColor: 'rgba(15, 23, 42, 0.35)',
+    },
+    cleaningIconGradient: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 66,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(226, 232, 240, 0.2)',
+    },
+    sparkleOrb: {
+        position: 'absolute',
+        top: 18,
+        right: 24,
+        width: 58,
+        height: 58,
+        borderRadius: 29,
+        backgroundColor: 'rgba(14, 165, 233, 0.18)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    postLoginTextContainer: {
+        alignItems: 'center',
+        gap: 12,
+    },
+    postLoginTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: '#f8fafc',
+        textAlign: 'center',
+    },
+    postLoginSubtitle: {
+        fontSize: 16,
+        color: '#e0f2fe',
+        textAlign: 'center',
+        lineHeight: 22,
+        maxWidth: 320,
+    },
+    postLoginProgressBar: {
+        width: '80%',
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: 'rgba(148, 163, 184, 0.3)',
+        overflow: 'hidden',
+        marginTop: 4,
+    },
+    postLoginProgressFill: {
+        height: '100%',
+        backgroundColor: '#38bdf8',
+        borderRadius: 4,
+        alignSelf: 'flex-start',
+    },
+    postLoginStatusRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginTop: 10,
+    },
+    postLoginHint: {
+        fontSize: 13,
+        color: 'rgba(226, 232, 240, 0.85)',
+        letterSpacing: 0.3,
     },
     headerSection: {
         paddingTop: Platform.OS === 'ios' ? 60 : 40,

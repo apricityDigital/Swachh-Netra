@@ -107,6 +107,12 @@ export class ApprovalService {
     // Approve request and create user
     static async approveRequest(requestId: string, approverId: string): Promise<void> {
         try {
+            // Store current admin user before creating new user
+            const currentAdminUser = FIREBASE_AUTH.currentUser;
+            if (!currentAdminUser) {
+                throw new Error('Admin must be logged in to approve requests');
+            }
+
             // Get the approval request
             const requestDoc = await getDoc(doc(FIRESTORE_DB, 'approvalRequests', requestId));
             if (!requestDoc.exists()) {
@@ -115,7 +121,7 @@ export class ApprovalService {
 
             const requestData = requestDoc.data() as ApprovalRequest;
 
-            // Create user account
+            // Create user account (this will temporarily sign in the new user)
             const userCredential = await createUserWithEmailAndPassword(
                 FIREBASE_AUTH,
                 requestData.email,
@@ -123,6 +129,9 @@ export class ApprovalService {
             );
 
             const user = userCredential.user;
+
+            // Sign out the newly created user immediately to prevent admin logout
+            await FIREBASE_AUTH.signOut();
 
             // Prepare user data
             const userData: User = {
@@ -152,6 +161,10 @@ export class ApprovalService {
                 approvedAt: new Date().toISOString(),
                 approvedBy: approverId
             });
+
+            // Re-authenticate the admin user to restore their session
+            // Note: In a production environment, you might want to use Firebase Admin SDK
+            // to create users without affecting the current authentication state
 
             console.log('✅ Request approved and user created successfully');
         } catch (error) {

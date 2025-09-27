@@ -138,6 +138,13 @@ const DriverApprovals = ({ navigation }: any) => {
 
     const handleApproveRequest = async (request: DriverRequest) => {
         try {
+            // Store current contractor user before creating new user
+            const currentContractorUser = FIREBASE_AUTH.currentUser;
+            if (!currentContractorUser) {
+                Alert.alert('Error', 'You must be logged in to approve requests');
+                return;
+            }
+
             // Create user account
             const userCredential = await createUserWithEmailAndPassword(
                 FIREBASE_AUTH,
@@ -146,6 +153,9 @@ const DriverApprovals = ({ navigation }: any) => {
             );
 
             const user = userCredential.user;
+
+            // Sign out the newly created user immediately
+            await FIREBASE_AUTH.signOut();
 
             // Store user data with contractor assignment
             await setDoc(doc(FIRESTORE_DB, 'users', user.uid), {
@@ -246,7 +256,7 @@ const DriverApprovals = ({ navigation }: any) => {
                                 <Text style={styles.requestBadgeText}>PENDING</Text>
                             </View>
                         </View>
-                        
+
                         <View style={styles.requestDetails}>
                             <View style={styles.requestDetailRow}>
                                 <MaterialIcons name="email" size={16} color="#6b7280" />
@@ -324,7 +334,7 @@ const DriverApprovals = ({ navigation }: any) => {
                             </Text>
                         </View>
                     </View>
-                    
+
                     <View style={styles.driverDetails}>
                         <View style={styles.driverDetailRow}>
                             <MaterialIcons name="phone" size={16} color="#6b7280" />
@@ -346,10 +356,10 @@ const DriverApprovals = ({ navigation }: any) => {
                             ]}
                             onPress={() => toggleDriverStatus(driver)}
                         >
-                            <MaterialIcons 
-                                name={driver.isActive ? 'block' : 'check-circle'} 
-                                size={20} 
-                                color="#fff" 
+                            <MaterialIcons
+                                name={driver.isActive ? 'block' : 'check-circle'}
+                                size={20}
+                                color="#fff"
                             />
                             <Text style={styles.statusButtonText}>
                                 {driver.isActive ? 'Deactivate' : 'Activate'}
@@ -364,11 +374,11 @@ const DriverApprovals = ({ navigation }: any) => {
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="#f59e0b" />
-            
+
             {/* Header */}
             <LinearGradient colors={['#f59e0b', '#d97706']} style={styles.header}>
-                <TouchableOpacity 
-                    style={styles.backButton} 
+                <TouchableOpacity
+                    style={styles.backButton}
                     onPress={() => navigation.goBack()}
                 >
                     <MaterialIcons name="arrow-back" size={24} color="#fff" />

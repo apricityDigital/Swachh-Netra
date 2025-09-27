@@ -323,11 +323,20 @@ const WorkerAssignment = ({ navigation }: any) => {
             </View>
 
             {assignedFeederPoints.length > 0 ? (
-              <View style={{ maxHeight: 150 }}>
-                <FlatList
-                  data={assignedFeederPoints}
-                  renderItem={({ item: fp }) => (
-                    <View key={fp.id} style={styles.feederPointItem}>
+              <View style={styles.feederPointsScrollContainer}>
+                <ScrollView
+                  style={styles.feederPointsScrollView}
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
+                >
+                  {assignedFeederPoints.map((fp, index) => (
+                    <View
+                      key={fp.id}
+                      style={[
+                        styles.feederPointItem,
+                        index === assignedFeederPoints.length - 1 && styles.feederPointItemLast
+                      ]}
+                    >
                       <View style={styles.feederPointIcon}>
                         <MaterialIcons name="place" size={14} color="#059669" />
                       </View>
@@ -336,9 +345,8 @@ const WorkerAssignment = ({ navigation }: any) => {
                         <Text style={styles.feederPointArea}>{fp.areaName}</Text>
                       </View>
                     </View>
-                  )}
-                  keyExtractor={(fp) => fp.id}
-                />
+                  ))}
+                </ScrollView>
               </View>
             ) : (
               <View style={styles.noAssignmentContainer}>
@@ -1078,12 +1086,27 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
   },
+  feederPointsScrollContainer: {
+    maxHeight: 150,
+    backgroundColor: "#f8fafc",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  feederPointsScrollView: {
+    maxHeight: 150,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
   feederPointItem: {
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: "#e2e8f0",
+  },
+  feederPointItemLast: {
+    borderBottomWidth: 0,
   },
   feederPointIcon: {
     width: 24,

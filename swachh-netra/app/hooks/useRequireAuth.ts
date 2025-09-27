@@ -19,13 +19,13 @@ export const useRequireAuth = (
     redirectTo = 'Login',
     showAlert = true
   } = options;
- 
-  const { 
-    userData, 
-    isAuthenticated, 
-    loading, 
-    hasRole, 
-    hasPermission 
+
+  const {
+    userData,
+    isAuthenticated,
+    loading,
+    hasRole,
+    hasPermission
   } = useAuth();
 
   // Redirect to login page if user is not authenticated
@@ -78,8 +78,10 @@ export const useRequireAuth = (
     isAuthenticated,
     userData,
     loading,
-    hasAccess: isAuthenticated && 
-      (!requiredRole || hasRole(requiredRole)) && 
+    hasRole,
+    hasPermission,
+    hasAccess: isAuthenticated &&
+      (!requiredRole || hasRole(requiredRole)) &&
       (!requiredPermission || hasPermission(requiredPermission))
   };
 };

@@ -18,6 +18,8 @@ import { WorkerAssignmentService } from "../../../services/WorkerAssignmentServi
 import { WorkerAttendanceService } from "../../../services/WorkerAttendanceService"
 import { useQuickLogout } from "../../hooks/useLogout"
 import { useAuth } from "../../../contexts/AuthContext"
+import SwachhHRSidebar from "../../components/SwachhHRSidebar"
+import { PieChart, LineChart } from "react-native-chart-kit"
 
 const { width } = Dimensions.get("window")
 
@@ -26,6 +28,7 @@ const SwachhHRDashboard = ({ navigation }: any) => {
   const { userData } = useAuth()
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [sidebarVisible, setSidebarVisible] = useState(false)
   const [hrStats, setHrStats] = useState({
     totalWorkers: 0,
     activeWorkers: 0,
@@ -38,6 +41,40 @@ const SwachhHRDashboard = ({ navigation }: any) => {
     totalAssignments: 0,
   })
   const [userName, setUserName] = useState("HR Manager")
+
+  // Chart state
+  const [todayCounts, setTodayCounts] = useState({ present: 0, absent: 0, unmarked: 0 })
+  const [trendLabels, setTrendLabels] = useState<string[]>([])
+  const [trendRates, setTrendRates] = useState<number[]>([])
+  const [trendRangeDays, setTrendRangeDays] = useState<7 | 14 | 30>(14)
+  const [trendDetails, setTrendDetails] = useState<{
+    label: string
+    key: string
+    present: number
+    absent: number
+    unmarked: number
+    total: number
+    rate: number
+  }[]>([])
+  const [selectedDayInfo, setSelectedDayInfo] = useState<{
+    label: string
+    key: string
+    present: number
+    absent: number
+    unmarked: number
+    total: number
+    rate: number
+  } | null>(null)
+
+  const chartConfig = {
+    backgroundGradientFrom: "#ffffff",
+    backgroundGradientTo: "#ffffff",
+    decimalPlaces: 0,
+    color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+    labelColor: () => "#6b7280",
+    propsForDots: { r: "3", strokeWidth: "2", stroke: "#3b82f6" },
+    propsForBackgroundLines: { stroke: "#e5e7eb" },
+  }
 
   const hrActions = [
     {
@@ -132,6 +169,13 @@ const SwachhHRDashboard = ({ navigation }: any) => {
         totalAssignments,
       })
 
+      // Build today's pie data counts
+      const present = todayAttendanceStats.presentCount
+      const totalRecords = todayAttendanceStats.totalRecords
+      const absent = Math.max(totalRecords - present, 0)
+      const unmarked = Math.max(allWorkers.length - totalRecords, 0)
+      setTodayCounts({ present, absent, unmarked })
+
     } catch (error) {
       console.error("Error fetching dashboard data:", error)
       // Fallback to default values on error
@@ -150,6 +194,71 @@ const SwachhHRDashboard = ({ navigation }: any) => {
       setLoading(false)
     }
   }
+
+  const updateTrend = async (rangeDays: 7 | 14 | 30, totalWorkersCount?: number) => {
+    try {
+      const endDate = new Date()
+      const startDate = new Date()
+      startDate.setDate(endDate.getDate() - (rangeDays - 1))
+      const stats = await WorkerAttendanceService.getAttendanceStatisticsForHRAndAdmin(
+        'swachh_hr',
+        startDate,
+        endDate
+      )
+      const days: string[] = []
+      const rates: number[] = []
+      const details: {
+        label: string
+        key: string
+        present: number
+        absent: number
+        unmarked: number
+        total: number
+        rate: number
+      }[] = []
+      const totalWorkers = totalWorkersCount ?? hrStats.totalWorkers
+      const dailyStats = stats?.dailyStats || {}
+      for (let i = 0; i < rangeDays; i++) {
+        const d = new Date(startDate)
+        d.setDate(startDate.getDate() + i)
+        const key = d.toISOString().split('T')[0]
+        const label = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        const dayStat = dailyStats[key]
+        const present = dayStat?.present || 0
+        const absent = dayStat?.absent || 0
+        const recordedTotal = dayStat?.total || 0
+        const unmarked = Math.max(totalWorkers - recordedTotal, 0)
+        const rate = recordedTotal > 0 ? Math.round((present / recordedTotal) * 100) : 0
+        days.push(label)
+        rates.push(rate)
+        details.push({
+          label,
+          key,
+          present,
+          absent,
+          unmarked,
+          total: recordedTotal,
+          rate,
+        })
+      }
+      setTrendLabels(days)
+      setTrendRates(rates)
+      setTrendDetails(details)
+      setSelectedDayInfo(details.length > 0 ? details[details.length - 1] : null)
+    } catch (e) {
+      console.error('Error updating trend', e)
+      setTrendLabels([])
+      setTrendRates([])
+      setTrendDetails([])
+      setSelectedDayInfo(null)
+    }
+  }
+
+  useEffect(() => {
+    if (trendRangeDays) {
+      updateTrend(trendRangeDays, hrStats.totalWorkers)
+    }
+  }, [trendRangeDays, hrStats.totalWorkers])
 
   const getTodayAttendanceStats = async () => {
     try {
@@ -222,6 +331,9 @@ const SwachhHRDashboard = ({ navigation }: any) => {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
+            <TouchableOpacity onPress={() => setSidebarVisible(true)} style={styles.menuButton}>
+              <MaterialIcons name="menu" size={24} color="#374151" />
+            </TouchableOpacity>
             <View style={styles.hrBadge}>
               <MaterialIcons name="group" size={24} color="#3b82f6" />
             </View>
@@ -320,31 +432,109 @@ const SwachhHRDashboard = ({ navigation }: any) => {
           </View>
         </View>
 
-        {/* Quick Actions */}
+        {/* Quick Actions moved to the sidebar */}
+
+        {/* Attendance Overview - Pie Chart */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsGrid}>
-            {hrActions.map((action, index) => (
+          <Text style={styles.sectionTitle}>Attendance Overview</Text>
+          <Card style={styles.chartCard}>
+            <View style={styles.chartContent}>
+              <PieChart
+                width={width - 40}
+                height={200}
+                accessor="count"
+                chartConfig={chartConfig}
+                backgroundColor="transparent"
+                paddingLeft="10"
+                data={[
+                  { name: "Present", count: todayCounts.present, color: "#10b981", legendFontColor: "#374151", legendFontSize: 12 },
+                  { name: "Absent", count: todayCounts.absent, color: "#ef4444", legendFontColor: "#374151", legendFontSize: 12 },
+                  { name: "Unmarked", count: todayCounts.unmarked, color: "#f59e0b", legendFontColor: "#374151", legendFontSize: 12 },
+                ]}
+                hasLegend
+                absolute
+              />
+            </View>
+          </Card>
+        </View>
+
+        {/* Attendance Trend - Line Chart */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Last {trendRangeDays} Days Attendance</Text>
+            <View style={styles.filtersRow}>
               <TouchableOpacity
-                key={index}
-                onPress={() => handleAction(action.screen)}
-                activeOpacity={0.7}
+                style={[styles.filterChip, trendRangeDays === 7 && styles.filterChipActive]}
+                onPress={() => setTrendRangeDays(7)}
+                activeOpacity={0.8}
               >
-                <Card style={styles.actionCard}>
-                  <View style={styles.actionContent}>
-                    <View style={[styles.actionIcon, { backgroundColor: action.bgColor }]}>
-                      <MaterialIcons name={action.icon as any} size={28} color={action.color} />
-                    </View>
-                    <View style={styles.actionInfo}>
-                      <Text style={styles.actionTitle}>{action.title}</Text>
-                      <Text style={styles.actionDescription}>{action.description}</Text>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
-                  </View>
-                </Card>
+                <Text style={[styles.filterChipText, trendRangeDays === 7 && styles.filterChipTextActive]}>7D</Text>
               </TouchableOpacity>
-            ))}
+              <TouchableOpacity
+                style={[styles.filterChip, trendRangeDays === 14 && styles.filterChipActive]}
+                onPress={() => setTrendRangeDays(14)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.filterChipText, trendRangeDays === 14 && styles.filterChipTextActive]}>14D</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.filterChip, trendRangeDays === 30 && styles.filterChipActive]}
+                onPress={() => setTrendRangeDays(30)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.filterChipText, trendRangeDays === 30 && styles.filterChipTextActive]}>30D</Text>
+              </TouchableOpacity>
+            </View>
           </View>
+          <Card style={styles.chartCard}>
+            <View style={styles.chartContent}>
+              <LineChart
+                data={{ labels: trendLabels, datasets: [{ data: trendRates }] }}
+                width={width - 40}
+                height={220}
+                chartConfig={chartConfig}
+                bezier
+                fromZero
+                yAxisSuffix="%"
+                style={{ borderRadius: 12 }}
+                onDataPointClick={({ index }) => {
+                  const detail = trendDetails[index]
+                  if (detail) {
+                    setSelectedDayInfo(detail)
+                  }
+                }}
+              />
+            </View>
+          </Card>
+          {selectedDayInfo && (
+            <Card style={styles.trendInfoCard}>
+              <View style={styles.trendInfoHeader}>
+                <Text style={styles.trendInfoTitle}>{selectedDayInfo.label}</Text>
+                <Text style={styles.trendInfoRate}>{selectedDayInfo.rate}% attendance</Text>
+              </View>
+              <View style={styles.trendInfoRow}>
+                <View style={styles.trendInfoLabel}>
+                  <View style={[styles.trendColorDot, { backgroundColor: '#10b981' }]} />
+                  <Text style={styles.trendInfoText}>Present</Text>
+                </View>
+                <Text style={styles.trendInfoValue}>{selectedDayInfo.present}</Text>
+              </View>
+              <View style={styles.trendInfoRow}>
+                <View style={styles.trendInfoLabel}>
+                  <View style={[styles.trendColorDot, { backgroundColor: '#ef4444' }]} />
+                  <Text style={styles.trendInfoText}>Absent</Text>
+                </View>
+                <Text style={styles.trendInfoValue}>{selectedDayInfo.absent}</Text>
+              </View>
+              <View style={styles.trendInfoRow}>
+                <View style={styles.trendInfoLabel}>
+                  <View style={[styles.trendColorDot, { backgroundColor: '#f59e0b' }]} />
+                  <Text style={styles.trendInfoText}>Unmarked</Text>
+                </View>
+                <Text style={styles.trendInfoValue}>{selectedDayInfo.unmarked}</Text>
+              </View>
+            </Card>
+          )}
         </View>
 
         {/* Today's Summary */}
@@ -403,6 +593,15 @@ const SwachhHRDashboard = ({ navigation }: any) => {
         </View>
       </ScrollView>
 
+      {/* HR Sidebar */}
+      <SwachhHRSidebar
+        navigation={navigation}
+        isVisible={sidebarVisible}
+        onClose={() => setSidebarVisible(false)}
+        onSelectAction={handleAction}
+        currentScreen="SwachhHRDashboard"
+      />
+
       {/* Professional Alert Component */}
       <AlertComponent />
     </SafeAreaView>
@@ -443,6 +642,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
+  },
+  menuButton: {
+    padding: 8,
+    borderRadius: 8,
+    marginRight: 8,
   },
   hrBadge: {
     backgroundColor: "#eff6ff",
@@ -489,6 +693,90 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#111827",
     marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  filtersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginLeft: 8,
+  },
+  filterChipActive: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#3b82f6',
+  },
+  filterChipText: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: '#1d4ed8',
+  },
+  trendInfoCard: {
+    marginTop: 16,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  trendInfoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  trendInfoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  trendInfoRate: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#2563eb',
+  },
+  trendInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  trendInfoLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  trendColorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  trendInfoText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  trendInfoValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
   },
   // Statistics styles
   statsGrid: {
@@ -537,6 +825,20 @@ const styles = StyleSheet.create({
   // Actions styles
   actionsGrid: {
     gap: 12,
+  },
+  chartCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  chartContent: {
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   actionCard: {
     backgroundColor: "#ffffff",

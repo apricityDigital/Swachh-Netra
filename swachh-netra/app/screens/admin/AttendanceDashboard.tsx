@@ -13,6 +13,8 @@ import {
 } from "react-native"
 import { Card, Text, Button, Chip, Searchbar, DataTable } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
+import { PieChart } from "react-native-chart-kit"
+import { Dimensions } from "react-native"
 import {
   collection,
   query,
@@ -393,6 +395,47 @@ const AttendanceDashboard = ({ navigation }: any) => {
           </View>
         </Card>
 
+        {/* Attendance Pie Chart */}
+        {stats.totalRecords > 0 && (
+          <Card style={styles.chartCard}>
+            <Text style={styles.cardTitle}>Attendance Distribution</Text>
+            <View style={styles.chartContainer}>
+              <PieChart
+                data={[
+                  {
+                    name: "Present",
+                    population: stats.presentCount,
+                    color: "#10b981",
+                    legendFontColor: "#374151",
+                    legendFontSize: 14,
+                  },
+                  {
+                    name: "Absent",
+                    population: stats.absentCount,
+                    color: "#ef4444",
+                    legendFontColor: "#374151",
+                    legendFontSize: 14,
+                  },
+                ]}
+                width={Dimensions.get("window").width - 64}
+                height={220}
+                chartConfig={{
+                  backgroundColor: "#ffffff",
+                  backgroundGradientFrom: "#ffffff",
+                  backgroundGradientTo: "#ffffff",
+                  color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                }}
+                accessor="population"
+                backgroundColor="transparent"
+                paddingLeft="15"
+                center={[10, 10]}
+                absolute
+              />
+            </View>
+          </Card>
+        )}
+
         {/* Search */}
         <View style={styles.searchContainer}>
           <Searchbar
@@ -569,6 +612,14 @@ const styles = StyleSheet.create({
   },
   statsCard: {
     marginBottom: 16,
+  },
+  chartCard: {
+    marginBottom: 16,
+    backgroundColor: "#ffffff",
+  },
+  chartContainer: {
+    alignItems: "center",
+    paddingBottom: 16,
   },
   cardTitle: {
     fontSize: 18,

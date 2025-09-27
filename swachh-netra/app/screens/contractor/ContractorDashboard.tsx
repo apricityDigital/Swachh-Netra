@@ -14,15 +14,18 @@ import {
 import { Card, Text, Button } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
 import AdminHeader from "../../components/AdminHeader"
+import ContractorSidebar from "../../components/ContractorSidebar"
 import { ContractorService, ContractorDashboardStats } from "../../../services/ContractorService"
 import FirebaseService from "../../../services/FirebaseService"
 import { useQuickLogout } from "../../hooks/useLogout"
+import { FIREBASE_AUTH } from "../../../FirebaseConfig"
 
 const { width } = Dimensions.get("window")
 
 const ContractorDashboard = ({ navigation }: any) => {
   const [refreshing, setRefreshing] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [sidebarVisible, setSidebarVisible] = useState(false)
   const [contractorStats, setContractorStats] = useState<ContractorDashboardStats>({
     totalDrivers: 0,
     activeDrivers: 0,
@@ -45,64 +48,7 @@ const ContractorDashboard = ({ navigation }: any) => {
   const [contractorId, setContractorId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const contractorActions = [
-    {
-      title: "Assign Drivers",
-      description: "Assign vehicles and routes to drivers",
-      icon: "assignment-ind",
-      color: "#3b82f6",
-      bgColor: "#eff6ff",
-      screen: "DriverAssignment",
-    },
-    {
-      title: "Daily Assignments",
-      description: "Manage daily route assignments",
-      icon: "today",
-      color: "#3b82f6",
-      bgColor: "#dbeafe",
-      screen: "ContractorDailyAssignments",
-    },
-    {
-      title: "Vehicle Management",
-      description: "Manage fleet and assignments",
-      icon: "local-shipping",
-      color: "#10b981",
-      bgColor: "#f0fdf4",
-      screen: "VehicleManagement",
-    },
-    {
-      title: "Trip Monitoring",
-      description: "Monitor daily trips and progress",
-      icon: "track-changes",
-      color: "#f59e0b",
-      bgColor: "#fffbeb",
-      screen: "TripMonitoring",
-    },
-    {
-      title: "Worker Attendance",
-      description: "View worker attendance records",
-      icon: "how-to-reg",
-      color: "#8b5cf6",
-      bgColor: "#faf5ff",
-      screen: "WorkerAttendance",
-    },
-    {
-      title: "Feeder Points",
-      description: "View assigned feeder points",
-      icon: "location-on",
-      color: "#ef4444",
-      bgColor: "#fef2f2",
-      screen: "FeederPoints",
-    },
-    {
-      title: "Reports",
-      description: "View performance reports",
-      icon: "analytics",
-      color: "#06b6d4",
-      bgColor: "#f0f9ff",
-      screen: "Reports",
-    },
-  ]
+  // Quick actions moved to sidebar
 
   useEffect(() => {
     fetchDashboardData()
@@ -245,6 +191,7 @@ const ContractorDashboard = ({ navigation }: any) => {
         userName={userName}
         showLogoutButton={true}
         onLogoutPress={quickLogout}
+        onMenuPress={() => setSidebarVisible(true)}
       />
 
       <ScrollView
@@ -318,32 +265,7 @@ const ContractorDashboard = ({ navigation }: any) => {
           </View>
         </View>
 
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsGrid}>
-            {contractorActions.map((action, index) => (
-              <TouchableOpacity
-                key={index}
-                onPress={() => handleAction(action.screen)}
-                activeOpacity={0.7}
-              >
-                <Card style={styles.actionCard}>
-                  <View style={styles.actionContent}>
-                    <View style={[styles.actionIcon, { backgroundColor: action.bgColor }]}>
-                      <MaterialIcons name={action.icon as any} size={28} color={action.color} />
-                    </View>
-                    <View style={styles.actionInfo}>
-                      <Text style={styles.actionTitle}>{action.title}</Text>
-                      <Text style={styles.actionDescription}>{action.description}</Text>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
-                  </View>
-                </Card>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+        {/* Quick Actions moved to the sidebar */}
 
         {/* Vehicle Status Overview */}
         <View style={styles.section}>
@@ -455,6 +377,15 @@ const ContractorDashboard = ({ navigation }: any) => {
 
       {/* Professional Alert Component */}
       <AlertComponent />
+
+      {/* Contractor Sidebar containing Quick Actions */}
+      <ContractorSidebar
+        navigation={navigation}
+        isVisible={sidebarVisible}
+        onClose={() => setSidebarVisible(false)}
+        onSelectAction={handleAction}
+        currentScreen="ContractorDashboard"
+      />
     </SafeAreaView>
   )
 }

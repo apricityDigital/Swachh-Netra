@@ -11,13 +11,13 @@ import {
   Dimensions,
   Alert,
 } from "react-native"
-import { Card, Text, Button, Chip, Avatar } from "react-native-paper"
+import { Card, Text, Button, Chip, ProgressBar } from "react-native-paper"
 import { MaterialIcons } from "@expo/vector-icons"
-import ProtectedRoute from "../../components/ProtectedRoute"
 import { useRequireAuth } from "../../hooks/useRequireAuth"
 import { DriverService, DriverDashboardData } from "../../../services/DriverService"
 import EnhancedFeederPointsList from "../../components/EnhancedFeederPointsList"
 import { useQuickLogout } from "../../hooks/useLogout"
+import DriverSidebar from "../../components/DriverSidebar"
 
 const { width } = Dimensions.get("window")
 
@@ -76,6 +76,8 @@ const DriverDashboard = ({ navigation }: any) => {
     totalWorkers: 0
   })
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [sidebarVisible, setSidebarVisible] = useState(false)
+  const [selectedInsight, setSelectedInsight] = useState<'trips' | 'waste' | 'workers'>('trips')
 
   useEffect(() => {
     console.log("🔄 [DriverDashboard] useEffect triggered with userData:", {
@@ -215,49 +217,6 @@ const DriverDashboard = ({ navigation }: any) => {
     return unsubscribe
   }
 
-  const driverActions = [
-    {
-      title: "Start Trip",
-      description: "Begin waste collection route",
-      icon: "play-circle",
-      color: "#10b981",
-      bgColor: "#f0fdf4",
-      action: "startTrip",
-    },
-    {
-      title: "Worker Attendance",
-      description: "Mark worker attendance with photos",
-      icon: "people",
-      color: "#3b82f6",
-      bgColor: "#eff6ff",
-      action: "attendance",
-    },
-    {
-      title: "Report Issue",
-      description: "Report vehicle or route issues",
-      icon: "report-problem",
-      color: "#f59e0b",
-      bgColor: "#fffbeb",
-      action: "reportIssue",
-    },
-    {
-      title: "View Route",
-      description: "Check assigned collection route",
-      icon: "map",
-      color: "#3b82f6",
-      bgColor: "#eff6ff",
-      action: "viewRoute",
-    },
-    {
-      title: "Collection Log",
-      description: "View collection history",
-      icon: "history",
-      color: "#8b5cf6",
-      bgColor: "#faf5ff",
-      action: "viewHistory",
-    },
-  ]
-
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true)
     await fetchDashboardData(true) // Force refresh on pull-to-refresh
@@ -283,6 +242,12 @@ const DriverDashboard = ({ navigation }: any) => {
         break
       case "viewHistory":
         Alert.alert("Collection Log", "History viewing will be implemented soon")
+        break
+      case "connectionTest":
+        handleConnectionTest()
+        break
+      case "debugInfo":
+        handleDebugInfo()
         break
       default:
         break
@@ -326,6 +291,51 @@ const DriverDashboard = ({ navigation }: any) => {
     })
   }
 
+  const handleConnectionTest = async () => {
+    try {
+      setLoading(true)
+      if (!userData?.contractorId || !userData?.uid) {
+        Alert.alert("No Contractor", "You are not assigned to any contractor yet.")
+        return
+      }
+
+      const { ContractorDriverConnectionService } = await import("../../../services/ContractorDriverConnectionService")
+      const testResult = await ContractorDriverConnectionService.testContractorDriverConnection(
+        userData.contractorId,
+        userData.uid
+      )
+
+      const statusMessage = testResult.isDataConsistent
+        ? "✅ Connection is working properly!"
+        : `❌ Connection issues found:\n${testResult.inconsistencies.join('\n')}`
+
+      Alert.alert(
+        "Connection Status",
+        statusMessage,
+        [
+          { text: "Refresh Data", onPress: () => fetchDashboardData(true) },
+          { text: "OK" }
+        ]
+      )
+    } catch (error) {
+      console.error("❌ [DriverDashboard] Error testing connection:", error)
+      Alert.alert("Error", "Failed to test connection")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDebugInfo = () => {
+    Alert.alert(
+      "Debug Info",
+      `Driver ID: ${userData?.uid}\nEmail: ${userData?.email}\nVehicle: ${assignedVehicle?.vehicleNumber || "None"}\nRoutes: ${assignedFeederPoints.length}\nContractor: ${contractorInfo?.name || "None"}`,
+      [
+        { text: "Refresh Data", onPress: () => fetchDashboardData(true) },
+        { text: "OK" }
+      ]
+    )
+  }
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -343,6 +353,9 @@ const DriverDashboard = ({ navigation }: any) => {
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
+            <TouchableOpacity onPress={() => setSidebarVisible(true)} style={styles.menuButton}>
+              <MaterialIcons name="menu" size={24} color="#374151" />
+            </TouchableOpacity>
             <View style={styles.driverBadge}>
               <MaterialIcons name="local-shipping" size={24} color="#3b82f6" />
             </View>
@@ -414,54 +427,168 @@ const DriverDashboard = ({ navigation }: any) => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Today's Overview</Text>
           <View style={styles.statsGrid}>
-            <Card style={styles.statCard}>
-              <View style={styles.statContent}>
-                <View style={[styles.statIcon, { backgroundColor: '#eff6ff' }]}>
-                  <MaterialIcons name="route" size={24} color="#3b82f6" />
+            <TouchableOpacity onPress={() => setSelectedInsight('trips')} activeOpacity={0.8}>
+              <Card style={[styles.statCard, selectedInsight === 'trips' && styles.statCardActive]}>
+                <View style={styles.statContent}>
+                  <View style={[styles.statIcon, { backgroundColor: '#eff6ff' }]}>
+                    <MaterialIcons name="route" size={24} color="#3b82f6" />
+                  </View>
+                  <View style={styles.statInfo}>
+                    <Text style={styles.statNumber}>{todayStats.completedTrips}/{todayStats.totalTrips}</Text>
+                    <Text style={styles.statLabel}>Trips</Text>
+                  </View>
                 </View>
-                <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{todayStats.completedTrips}/{todayStats.totalTrips}</Text>
-                  <Text style={styles.statLabel}>Trips</Text>
-                </View>
-              </View>
-            </Card>
+              </Card>
+            </TouchableOpacity>
 
-            <Card style={styles.statCard}>
-              <View style={styles.statContent}>
-                <View style={[styles.statIcon, { backgroundColor: '#f0fdf4' }]}>
-                  <MaterialIcons name="scale" size={24} color="#10b981" />
+            <TouchableOpacity onPress={() => setSelectedInsight('waste')} activeOpacity={0.8}>
+              <Card style={[styles.statCard, selectedInsight === 'waste' && styles.statCardActive]}>
+                <View style={styles.statContent}>
+                  <View style={[styles.statIcon, { backgroundColor: '#f0fdf4' }]}>
+                    <MaterialIcons name="scale" size={24} color="#10b981" />
+                  </View>
+                  <View style={styles.statInfo}>
+                    <Text style={styles.statNumber}>{todayStats.totalWasteCollected}kg</Text>
+                    <Text style={styles.statLabel}>Waste Collected</Text>
+                  </View>
                 </View>
-                <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{todayStats.totalWasteCollected}kg</Text>
-                  <Text style={styles.statLabel}>Waste Collected</Text>
-                </View>
-              </View>
-            </Card>
+              </Card>
+            </TouchableOpacity>
 
-            <Card style={styles.statCard}>
-              <View style={styles.statContent}>
-                <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
-                  <MaterialIcons name="people" size={24} color="#f59e0b" />
+            <TouchableOpacity onPress={() => setSelectedInsight('workers')} activeOpacity={0.8}>
+              <Card style={[styles.statCard, selectedInsight === 'workers' && styles.statCardActive]}>
+                <View style={styles.statContent}>
+                  <View style={[styles.statIcon, { backgroundColor: '#fef3c7' }]}>
+                    <MaterialIcons name="people" size={24} color="#f59e0b" />
+                  </View>
+                  <View style={styles.statInfo}>
+                    <Text style={styles.statNumber}>{todayStats.workersPresent}/{todayStats.totalWorkers}</Text>
+                    <Text style={styles.statLabel}>Workers</Text>
+                  </View>
                 </View>
-                <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{todayStats.workersPresent}/{todayStats.totalWorkers}</Text>
-                  <Text style={styles.statLabel}>Workers</Text>
-                </View>
-              </View>
-            </Card>
+              </Card>
+            </TouchableOpacity>
 
-            <Card style={styles.statCard}>
-              <View style={styles.statContent}>
-                <View style={[styles.statIcon, { backgroundColor: '#faf5ff' }]}>
-                  <MaterialIcons name="pending" size={24} color="#8b5cf6" />
+            <TouchableOpacity onPress={() => setSelectedInsight('trips')} activeOpacity={0.8}>
+              <Card style={styles.statCard}>
+                <View style={styles.statContent}>
+                  <View style={[styles.statIcon, { backgroundColor: '#faf5ff' }]}>
+                    <MaterialIcons name="pending" size={24} color="#8b5cf6" />
+                  </View>
+                  <View style={styles.statInfo}>
+                    <Text style={styles.statNumber}>{todayStats.pendingTrips}</Text>
+                    <Text style={styles.statLabel}>Pending</Text>
+                  </View>
                 </View>
-                <View style={styles.statInfo}>
-                  <Text style={styles.statNumber}>{todayStats.pendingTrips}</Text>
-                  <Text style={styles.statLabel}>Pending</Text>
-                </View>
-              </View>
-            </Card>
+              </Card>
+            </TouchableOpacity>
           </View>
+        </View>
+
+        {/* Performance Insights */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Performance Insights</Text>
+          <Card style={styles.insightsCard}>
+            <View style={styles.insightTabs}>
+              <Chip
+                selected={selectedInsight === 'trips'}
+                onPress={() => setSelectedInsight('trips')}
+                style={styles.insightChip}
+              >
+                Trip Progress
+              </Chip>
+              <Chip
+                selected={selectedInsight === 'waste'}
+                onPress={() => setSelectedInsight('waste')}
+                style={styles.insightChip}
+              >
+                Waste
+              </Chip>
+              <Chip
+                selected={selectedInsight === 'workers'}
+                onPress={() => setSelectedInsight('workers')}
+                style={styles.insightChip}
+              >
+                Workforce
+              </Chip>
+            </View>
+
+            {(() => {
+              const totalTrips = Math.max(todayStats.totalTrips, 0)
+              const tripProgress = totalTrips > 0 ? todayStats.completedTrips / totalTrips : 0
+              const wasteTarget = assignedFeederPoints.length > 0 ? assignedFeederPoints.length * 150 : 1000
+              const wasteProgress = wasteTarget > 0 ? Math.min(todayStats.totalWasteCollected / wasteTarget, 1) : 0
+              const workerTotal = Math.max(todayStats.totalWorkers, 0)
+              const workerProgress = workerTotal > 0 ? todayStats.workersPresent / workerTotal : 0
+
+              const insightMap = {
+                trips: {
+                  title: "Trips Completed",
+                  metric: `${todayStats.completedTrips} of ${todayStats.totalTrips}`,
+                  description: todayStats.totalTrips > 0
+                    ? `You have completed ${todayStats.completedTrips} trips so far. ${todayStats.pendingTrips} remaining.`
+                    : "No trips assigned for today yet.",
+                  progress: tripProgress,
+                  color: "#3b82f6",
+                  actionLabel: "Start Next Trip",
+                  actionKey: "startTrip" as const,
+                },
+                waste: {
+                  title: "Waste Collected",
+                  metric: `${todayStats.totalWasteCollected} kg`,
+                  description: wasteTarget > 0
+                    ? `Target: ${wasteTarget} kg based on assigned routes.`
+                    : "Collecting starts once routes are assigned.",
+                  progress: wasteProgress,
+                  color: "#10b981",
+                  actionLabel: "View Route",
+                  actionKey: "viewRoute" as const,
+                },
+                workers: {
+                  title: "Workers Present",
+                  metric: `${todayStats.workersPresent} of ${todayStats.totalWorkers}`,
+                  description: workerTotal > 0
+                    ? `${todayStats.workersPresent} workers have checked in today.`
+                    : "No workers assigned to your route yet.",
+                  progress: workerProgress,
+                  color: "#f59e0b",
+                  actionLabel: "Mark Attendance",
+                  actionKey: "attendance" as const,
+                }
+              }
+
+              const insight = insightMap[selectedInsight]
+
+              return (
+                <>
+                  <View style={styles.insightHeader}>
+                    <Text style={styles.insightTitle}>{insight.title}</Text>
+                    <Text style={[styles.insightMetric, { color: insight.color }]}>{insight.metric}</Text>
+                  </View>
+                  <ProgressBar progress={insight.progress} color={insight.color} style={styles.insightProgress} />
+                  <Text style={styles.insightDescription}>{insight.description}</Text>
+                  <View style={styles.insightFooter}>
+                    <Button
+                      mode="contained"
+                      onPress={() => handleAction(insight.actionKey)}
+                      style={styles.insightButton}
+                      buttonColor={insight.color}
+                      icon={selectedInsight === 'trips' ? 'play' : selectedInsight === 'waste' ? 'map' : 'check'}
+                    >
+                      {insight.actionLabel}
+                    </Button>
+                    <Button
+                      mode="text"
+                      onPress={() => setSidebarVisible(true)}
+                      textColor="#3b82f6"
+                    >
+                      Open Tools
+                    </Button>
+                  </View>
+                </>
+              )
+            })()}
+          </Card>
         </View>
 
         {/* Assigned Vehicle */}
@@ -625,111 +752,7 @@ const DriverDashboard = ({ navigation }: any) => {
           </View>
         )}
 
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionsGrid}>
-            {driverActions.map((action, index) => (
-              <TouchableOpacity
-                key={index}
-                onPress={() => handleAction(action.action)}
-                activeOpacity={0.7}
-              >
-                <Card style={styles.actionCard}>
-                  <View style={styles.actionContent}>
-                    <View style={[styles.actionIcon, { backgroundColor: action.bgColor }]}>
-                      <MaterialIcons name={action.icon as any} size={28} color={action.color} />
-                    </View>
-                    <View style={styles.actionInfo}>
-                      <Text style={styles.actionTitle}>{action.title}</Text>
-                      <Text style={styles.actionDescription}>{action.description}</Text>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={20} color="#9ca3af" />
-                  </View>
-                </Card>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Connection Status */}
-          <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: "#06b6d4", marginTop: 12 }]}
-            onPress={async () => {
-              try {
-                setLoading(true)
-                console.log("🔍 [DriverDashboard] Testing contractor-driver connection")
-
-                if (!userData?.contractorId) {
-                  Alert.alert("No Contractor", "You are not assigned to any contractor yet.")
-                  return
-                }
-
-                // Import the service dynamically to avoid circular imports
-                const { ContractorDriverConnectionService } = await import("../../../services/ContractorDriverConnectionService")
-
-                const testResult = await ContractorDriverConnectionService.testContractorDriverConnection(
-                  userData.contractorId,
-                  userData.uid
-                )
-
-                const statusMessage = testResult.isDataConsistent
-                  ? "✅ Connection is working properly!"
-                  : `❌ Connection issues found:\n${testResult.inconsistencies.join('\n')}`
-
-                Alert.alert(
-                  "Connection Status",
-                  statusMessage,
-                  [
-                    { text: "Refresh Data", onPress: () => fetchDashboardData(true) },
-                    { text: "OK" }
-                  ]
-                )
-              } catch (error) {
-                console.error("❌ [DriverDashboard] Error testing connection:", error)
-                Alert.alert("Error", "Failed to test connection")
-              } finally {
-                setLoading(false)
-              }
-            }}
-          >
-            <View style={styles.actionContent}>
-              <View style={[styles.actionIcon, { backgroundColor: "#ffffff" }]}>
-                <MaterialIcons name="link" size={28} color="#06b6d4" />
-              </View>
-              <View style={styles.actionInfo}>
-                <Text style={[styles.actionTitle, { color: "#ffffff" }]}>Connection Test</Text>
-                <Text style={[styles.actionDescription, { color: "#ffffff" }]}>Check contractor connection</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color="#ffffff" />
-            </View>
-          </TouchableOpacity>
-
-          {/* Debug Button - Remove in production */}
-          <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: "#f59e0b", marginTop: 8 }]}
-            onPress={() => {
-              Alert.alert(
-                "Debug Info",
-                `Driver ID: ${userData?.uid}\nEmail: ${userData?.email}\nVehicle: ${assignedVehicle?.vehicleNumber || "None"}\nRoutes: ${assignedFeederPoints.length}\nContractor: ${contractorInfo?.name || "None"}`,
-                [
-                  { text: "Refresh Data", onPress: () => fetchDashboardData(true) },
-                  { text: "OK" }
-                ]
-              )
-            }}
-          >
-            <View style={styles.actionContent}>
-              <View style={[styles.actionIcon, { backgroundColor: "#ffffff" }]}>
-                <MaterialIcons name="bug-report" size={28} color="#f59e0b" />
-              </View>
-              <View style={styles.actionInfo}>
-                <Text style={[styles.actionTitle, { color: "#ffffff" }]}>Debug Info</Text>
-                <Text style={[styles.actionDescription, { color: "#ffffff" }]}>View assignment details</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color="#ffffff" />
-            </View>
-          </TouchableOpacity>
-        </View>
+        {/* Quick actions moved to sidebar */}
 
         {/* Current Status */}
         <View style={styles.section}>
@@ -765,6 +788,12 @@ const DriverDashboard = ({ navigation }: any) => {
 
       {/* Professional Alert Component */}
       <AlertComponent />
+
+      <DriverSidebar
+        isVisible={sidebarVisible}
+        onClose={() => setSidebarVisible(false)}
+        onSelectAction={handleAction}
+      />
     </SafeAreaView>
   )
 }
@@ -803,6 +832,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flex: 1,
+  },
+  menuButton: {
+    padding: 8,
+    borderRadius: 8,
+    marginRight: 8,
   },
   driverBadge: {
     backgroundColor: "#eff6ff",
@@ -886,6 +920,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
   },
+  statCardActive: {
+    borderWidth: 2,
+    borderColor: "#3b82f6",
+  },
   statContent: {
     flexDirection: "row",
     alignItems: "center",
@@ -913,44 +951,58 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     fontWeight: "500",
   },
-  // Actions styles
-  actionsGrid: {
-    gap: 12,
-  },
-  actionCard: {
+  insightsCard: {
     backgroundColor: "#ffffff",
     borderRadius: 12,
+    padding: 16,
     elevation: 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
   },
-  actionContent: {
+  insightTabs: {
     flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  insightChip: {
+    backgroundColor: "#f3f4f6",
+  },
+  insightHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    padding: 16,
+    marginBottom: 12,
   },
-  actionIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 16,
-  },
-  actionInfo: {
-    flex: 1,
-  },
-  actionTitle: {
+  insightTitle: {
     fontSize: 16,
     fontWeight: "600",
     color: "#111827",
-    marginBottom: 2,
   },
-  actionDescription: {
+  insightMetric: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  insightProgress: {
+    height: 8,
+    borderRadius: 4,
+    marginBottom: 12,
+  },
+  insightDescription: {
     fontSize: 14,
     color: "#6b7280",
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  insightFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  insightButton: {
+    flex: 1,
+    marginRight: 12,
   },
   // Status styles
   statusCard: {
