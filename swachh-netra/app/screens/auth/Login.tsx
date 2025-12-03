@@ -125,13 +125,13 @@ const Login = () => {
                         toValue: 1,
                         duration: 900,
                         easing: Easing.out(Easing.cubic),
-                        useNativeDriver: true,
+                        useNativeDriver: false,
                     }),
                     Animated.timing(sparkleAnim, {
                         toValue: 0,
                         duration: 900,
                         easing: Easing.in(Easing.cubic),
-                        useNativeDriver: true,
+                        useNativeDriver: false,
                     }),
                 ])
             );
