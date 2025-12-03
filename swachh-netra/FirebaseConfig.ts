@@ -8,8 +8,8 @@ import Constants from 'expo-constants';
 // Using both process.env and Constants.expoConfig.extra as fallback
 const getEnvVar = (key: string, fallbackKey?: string) => {
   return process.env[key] ||
-    Constants.expoConfig?.extra?.[fallbackKey] ||
-    Constants.manifest?.extra?.[fallbackKey];
+    (fallbackKey ? Constants.expoConfig?.extra?.[fallbackKey] : undefined) ||
+    (fallbackKey ? Constants.manifest?.extra?.[fallbackKey] : undefined);
 };
 
 // Firebase configuration
