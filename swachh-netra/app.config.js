@@ -12,7 +12,7 @@ export default {
     scheme: "swachh-netra",
     extra: {
       eas: {
-        projectId: "74c2f145-3118-4013-80fc-5c3bf9cf5bce"
+        projectId: "11bff6c4-5737-43b3-a714-6648eb6b2d97"
       },
       firebaseApiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
       firebaseAuthDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
